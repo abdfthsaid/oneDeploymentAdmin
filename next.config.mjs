@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: false,
   experimental: {
+    instrumentationHook: true,
     optimizePackageImports: [
       "@fortawesome/free-solid-svg-icons",
       "@fortawesome/react-fontawesome",
