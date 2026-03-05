@@ -44,7 +44,7 @@ export function getMonthBoundsUTC3() {
 }
 
 // Apply revenue cuts: subtract 1% Waafi fee per transaction
-// The amount in DB (e.g. $0.75) is the gross charge — Waafi takes 1%
+// The amount in DB is the gross charge (varies: $0.50, $0.75, $1.00, etc.) — Waafi takes 1%
 export function applyRevenueCuts(grossAmount: number): number {
   const waafiFee = grossAmount * 0.01;
   const net = grossAmount - waafiFee;

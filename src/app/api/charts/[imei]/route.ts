@@ -2,31 +2,51 @@ import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
 import { applyRevenueCuts } from "@/lib/timeUtils";
+import { imeiToStationCode } from "@/lib/imeiMap";
 import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
 
 const CACHE_TTL_MS = 60_000;
+const SOMALIA_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+3
 
-const imeiToStationCode: Record<string, string> = {
-  WSEP161721195358: "58",
-  WSEP161741066504: "04",
-  WSEP161741066505: "05",
-  WSEP161741066502: "02",
-  WSEP161741066503: "03",
-};
-
-function isoDate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+// Convert a UTC Date to a Somalia-local ISO date string (YYYY-MM-DD)
+function isoDateUTC3(d: Date) {
+  const local = new Date(d.getTime() + SOMALIA_OFFSET_MS);
+  const y = local.getUTCFullYear();
+  const m = String(local.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(local.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
-function getWeekNumber(d: Date) {
-  const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+// ISO week number based on Somalia-local date
+function getWeekNumberUTC3(d: Date) {
+  const local = new Date(d.getTime() + SOMALIA_OFFSET_MS);
+  const dt = new Date(
+    Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()),
+  );
   const dayNum = dt.getUTCDay() || 7;
   dt.setUTCDate(dt.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
   return Math.ceil(((dt.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+// Month label based on Somalia-local date (e.g. "January 2025")
+function monthLabelUTC3(d: Date) {
+  const local = new Date(d.getTime() + SOMALIA_OFFSET_MS);
+  const months = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+  return `${months[local.getUTCMonth()]} ${local.getUTCFullYear()}`;
 }
 
 export async function GET(
@@ -72,12 +92,9 @@ export async function GET(
           if (!r.timestamp) return;
 
           const ts = r.timestamp.toDate();
-          const day = isoDate(ts);
-          const week = `Week ${getWeekNumber(ts)}`;
-          const month = ts.toLocaleString("default", {
-            year: "numeric",
-            month: "long",
-          });
+          const day = isoDateUTC3(ts);
+          const week = `Week ${getWeekNumberUTC3(ts)}`;
+          const month = monthLabelUTC3(ts);
 
           const rawAmt = parseFloat(r.amount) || 0;
           const amt = rawAmt > 0 ? applyRevenueCuts(rawAmt) : 0;
