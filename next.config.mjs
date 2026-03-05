@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
+  cashComponent: true,
   experimental: {
     instrumentationHook: true,
     optimizePackageImports: [
