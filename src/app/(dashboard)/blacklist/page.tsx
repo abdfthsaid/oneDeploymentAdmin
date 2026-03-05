@@ -256,7 +256,7 @@ export default function BlacklistPage() {
         <div className="text-center py-12 text-red-600 dark:text-red-400">
           <p>{error}</p>
           <button
-            onClick={fetchBlacklist}
+            onClick={() => fetchBlacklist()}
             className="mt-2 text-sm underline hover:no-underline"
           >
             Try again
