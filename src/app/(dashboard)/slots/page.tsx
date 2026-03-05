@@ -159,15 +159,17 @@ function StatCard({
   icon,
   label,
   value,
+  color,
 }: {
   icon: any;
   label: string;
   value: number;
+  color: string;
 }) {
   return (
     <div className="flex flex-col items-center p-3 text-center border rounded-lg shadow bg-gradient-to-br from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 dark:border-gray-700">
       <div>
-        <FontAwesomeIcon icon={icon} />
+        <FontAwesomeIcon icon={icon} className={color} />
       </div>
       <div className="text-xs text-gray-500 dark:text-gray-400">{label}</div>
       <div className="text-xl font-bold dark:text-white">{value}</div>
@@ -276,10 +278,30 @@ export default function SlotsPage() {
   );
 
   const statCards = [
-    { label: "Total Slots", value: stats.total, icon: faPlug },
-    { label: "Available", value: stats.available, icon: faCheckCircle },
-    { label: "Occupied", value: stats.rented, icon: faLock },
-    { label: "Overdue", value: stats.overdue, icon: faExclamationTriangle },
+    {
+      label: "Total Slots",
+      value: stats.total,
+      icon: faPlug,
+      color: "text-blue-500",
+    },
+    {
+      label: "Available",
+      value: stats.available,
+      icon: faCheckCircle,
+      color: "text-green-500",
+    },
+    {
+      label: "Occupied",
+      value: stats.rented,
+      icon: faLock,
+      color: "text-orange-500",
+    },
+    {
+      label: "Overdue",
+      value: stats.overdue,
+      icon: faExclamationTriangle,
+      color: "text-red-500",
+    },
   ];
 
   return (
@@ -358,6 +380,7 @@ export default function SlotsPage() {
             icon={stat.icon}
             label={stat.label}
             value={stat.value}
+            color={stat.color}
           />
         ))}
       </div>

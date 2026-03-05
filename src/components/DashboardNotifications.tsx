@@ -55,7 +55,7 @@ export default function DashboardNotifications({
     const recentTxs = txs.filter((t: any) => {
       if (!t.timestamp?._seconds) return false;
       const txTime = new Date(t.timestamp._seconds * 1000);
-      return (now.getTime() - txTime.getTime()) / (1000 * 60 * 60) <= 24;
+      return (now.getTime() - txTime.getTime()) / (1000 * 60 * 60) <= 1;
     });
 
     recentTxs.forEach((t: any) => {
