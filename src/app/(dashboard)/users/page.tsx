@@ -68,9 +68,10 @@ export default function UsersPage() {
     setAlert({ open: true, message, type });
   };
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (force = false) => {
     setLoading(true);
     try {
+      if (force) apiService.invalidateReadCache(["/api/users"]);
       const res = await apiService.getUsers();
       setUsers(res.data.users || res.data || []);
     } catch (err: any) {
@@ -117,15 +118,21 @@ export default function UsersPage() {
         role: "User",
         permissions: [],
       });
-      fetchUsers();
+      await fetchUsers(true);
       showAlert("User created successfully!", "success");
       setTimeout(() => {
         setSuccess(false);
         setModalOpen(false);
       }, 1500);
     } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.message || err.message || "Something went wrong";
+      const raw =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        "Something went wrong";
+      const errorMessage = raw
+        .replace(/[\u2705\u274C\u26A0\uFE0F]/g, "")
+        .trim();
       setModalError(errorMessage);
       showAlert(errorMessage, "error");
     } finally {
@@ -146,12 +153,18 @@ export default function UsersPage() {
         role: editForm.role.toLowerCase(),
         permissions: editForm.permissions,
       });
-      fetchUsers();
+      await fetchUsers(true);
       showAlert("User updated successfully!", "success");
       setEditModalOpen(false);
     } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.message || err.message || "Something went wrong";
+      const raw =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        "Something went wrong";
+      const errorMessage = raw
+        .replace(/[\u2705\u274C\u26A0\uFE0F]/g, "")
+        .trim();
       setEditError(errorMessage);
       showAlert(errorMessage, "error");
     } finally {
@@ -184,10 +197,16 @@ export default function UsersPage() {
     try {
       await apiService.deleteUser(confirmDelete.user.id);
       showAlert("User deleted successfully!", "success");
-      fetchUsers();
+      await fetchUsers(true);
     } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.message || err.message || "Something went wrong";
+      const raw =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        "Something went wrong";
+      const errorMessage = raw
+        .replace(/[\u2705\u274C\u26A0\uFE0F]/g, "")
+        .trim();
       showAlert(errorMessage, "error");
     } finally {
       setDeleteLoading(false);

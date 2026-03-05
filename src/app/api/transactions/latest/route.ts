@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 
         const rentalsSnapshot = await db
           .collection("rentals")
-          .where("status", "==", "rented")
+          .where("status", "in", ["rented", "returned"])
           .where("timestamp", ">=", twoDaysAgo)
           .orderBy("timestamp", "desc")
           .limit(10)
