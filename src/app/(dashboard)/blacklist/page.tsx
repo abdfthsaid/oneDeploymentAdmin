@@ -12,6 +12,7 @@ import {
   faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
 import { apiService } from "@/lib/api";
+import CustomAlert from "@/components/CustomAlert";
 
 export default function BlacklistPage() {
   const [blacklist, setBlacklist] = useState<any[]>([]);
@@ -26,14 +27,36 @@ export default function BlacklistPage() {
     customerName: "",
     reason: "Did not return battery",
   });
+  const [alert, setAlert] = useState<{
+    open: boolean;
+    message: string;
+    type: "success" | "error" | "warning" | "info";
+  }>({ open: false, message: "", type: "success" });
+  const [confirmDelete, setConfirmDelete] = useState<{
+    open: boolean;
+    id: string;
+    phone: string;
+  }>({ open: false, id: "", phone: "" });
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const showAlert = (
+    message: string,
+    type: "success" | "error" | "warning" | "info",
+  ) => {
+    setAlert({ open: true, message, type });
+  };
+
+  const cleanError = (raw: string) =>
+    raw.replace(/[\u2705\u274C\u26A0\uFE0F]/g, "").trim();
 
   useEffect(() => {
     fetchBlacklist();
   }, []);
 
-  const fetchBlacklist = async () => {
+  const fetchBlacklist = async (force = false) => {
     try {
       setLoading(true);
+      if (force) apiService.invalidateReadCache(["/api/blacklist"]);
       const response = await apiService.getBlacklist();
       setBlacklist(response.data.blacklist || response.data || []);
       setError(null);
@@ -56,21 +79,35 @@ export default function BlacklistPage() {
         customerName: "",
         reason: "Did not return battery",
       });
-      fetchBlacklist();
+      await fetchBlacklist(true);
+      showAlert("User added to blacklist successfully", "success");
     } catch (err: any) {
-      alert(err.response?.data?.error || "Failed to add to blacklist");
+      const raw =
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to add to blacklist";
+      showAlert(cleanError(raw), "error");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleRemoveFromBlacklist = async (id: string, phoneNumber: string) => {
-    if (!confirm(`Remove ${phoneNumber} from blacklist?`)) return;
+  const handleRemoveFromBlacklist = async () => {
+    if (!confirmDelete.id) return;
     try {
-      await apiService.removeFromBlacklist(id);
-      fetchBlacklist();
-    } catch {
-      alert("Failed to remove from blacklist");
+      setDeleteLoading(true);
+      await apiService.removeFromBlacklist(confirmDelete.id);
+      setConfirmDelete({ open: false, id: "", phone: "" });
+      await fetchBlacklist(true);
+      showAlert("User removed from blacklist successfully", "success");
+    } catch (err: any) {
+      const raw =
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to remove from blacklist";
+      showAlert(cleanError(raw), "error");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -97,6 +134,53 @@ export default function BlacklistPage() {
 
   return (
     <div className="p-4 md:p-6">
+      {alert.open && (
+        <CustomAlert
+          message={alert.message}
+          type={alert.type}
+          onClose={() => setAlert({ ...alert, open: false })}
+        />
+      )}
+
+      {/* Confirm Delete Modal */}
+      {confirmDelete.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">
+              Remove from Blacklist
+            </h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              Are you sure you want to remove{" "}
+              <span className="font-semibold">{confirmDelete.phone}</span> from
+              the blacklist?
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() =>
+                  setConfirmDelete({ open: false, id: "", phone: "" })
+                }
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRemoveFromBlacklist}
+                disabled={deleteLoading}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center"
+              >
+                {deleteLoading && (
+                  <FontAwesomeIcon
+                    icon={faSpinner}
+                    className="animate-spin mr-2"
+                  />
+                )}
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
         <div className="flex items-center mb-4 md:mb-0">
@@ -241,10 +325,11 @@ export default function BlacklistPage() {
                       <td className="px-4 py-4 text-right">
                         <button
                           onClick={() =>
-                            handleRemoveFromBlacklist(
-                              entry.id,
-                              entry.phoneNumber,
-                            )
+                            setConfirmDelete({
+                              open: true,
+                              id: entry.id,
+                              phone: entry.phoneNumber,
+                            })
                           }
                           className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-2"
                           title="Remove from blacklist"
