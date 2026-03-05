@@ -2,8 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { updateStationStats } from "@/lib/stationStatsJob";
 import { cacheComponent } from "@/lib/cacheComponent";
 
+const QUIET_START_HOUR = 1; // 1:00 AM UTC+3
+const QUIET_END_HOUR = 8; // 8:00 AM UTC+3
+
+function getNowUTC3() {
+  const now = new Date();
+  return new Date(now.getTime() + 3 * 60 * 60 * 1000);
+}
+
+function isQuietHours(): boolean {
+  const hour = getNowUTC3().getUTCHours();
+  return hour >= QUIET_START_HOUR && hour < QUIET_END_HOUR;
+}
+
 export async function GET(req: NextRequest) {
-  // Vercel Cron sends CRON_SECRET via Authorization header automatically
   const CRON_SECRET = process.env.CRON_SECRET;
 
   if (CRON_SECRET) {
@@ -13,12 +25,26 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Quiet hours check (1 AM – 8 AM UTC+3)
+  if (isQuietHours()) {
+    const nowUtc3 = getNowUTC3();
+    console.log(
+      `😴 Quiet hours (${QUIET_START_HOUR}:00–${QUIET_END_HOUR}:00 UTC+3), current: ${nowUtc3.getUTCHours()}:${String(
+        nowUtc3.getUTCMinutes(),
+      ).padStart(2, "0")} — skipping station update`,
+    );
+    return NextResponse.json({
+      message: "Skipped: quiet hours (01:00–08:00 UTC+3)",
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   try {
-    console.log("⏱️ Cron: Updating station stats...");
+    console.log("⏱️ Cron: Updating all station stats...");
     const result = await updateStationStats();
     cacheComponent.invalidatePrefix("stations:stats:");
     return NextResponse.json({
-      message: "Station stats updated",
+      message: "All station stats updated",
       ...result,
       timestamp: new Date().toISOString(),
     });
