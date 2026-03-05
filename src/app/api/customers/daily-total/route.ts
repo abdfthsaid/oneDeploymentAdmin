@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   ]);
   if (roleCheck) return roleCheck;
 
-  const { startUtc, dateStr } = getDayBoundsUTC3();
+  const { startUtc, endUtc, dateStr } = getDayBoundsUTC3();
 
   const countFromSnapshot = (snap: any) => {
     const uniqueCustomers = new Set<string>();
@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
         const snapshot = await db
           .collection("rentals")
           .where("timestamp", ">=", Timestamp.fromDate(startUtc))
+          .where("timestamp", "<", Timestamp.fromDate(endUtc))
           .where("status", "in", ["rented", "returned"])
           .get();
 

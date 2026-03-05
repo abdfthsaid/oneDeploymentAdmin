@@ -42,8 +42,12 @@ export async function GET(req: NextRequest) {
   ]);
   if (roleCheck) return roleCheck;
 
-  const { startUtc, dateStr } = getDayBoundsUTC3();
-  const { startUtc: monthStartUtc, monthKey } = getMonthBoundsUTC3();
+  const { startUtc, endUtc, dateStr } = getDayBoundsUTC3();
+  const {
+    startUtc: monthStartUtc,
+    endUtc: monthEndUtc,
+    monthKey,
+  } = getMonthBoundsUTC3();
 
   try {
     const payload = await cacheComponent.remember(
@@ -56,11 +60,13 @@ export async function GET(req: NextRequest) {
           db
             .collection("rentals")
             .where("timestamp", ">=", Timestamp.fromDate(startUtc))
+            .where("timestamp", "<", Timestamp.fromDate(endUtc))
             .where("status", "in", ["rented", "returned"])
             .get(),
           db
             .collection("rentals")
             .where("timestamp", ">=", Timestamp.fromDate(monthStartUtc))
+            .where("timestamp", "<", Timestamp.fromDate(monthEndUtc))
             .where("status", "in", ["rented", "returned"])
             .get(),
         ]);

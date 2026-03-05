@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowUp,
@@ -8,8 +8,11 @@ import {
   faCalendarDay,
   faMoneyBillWave,
   faCalendar,
+  faSyncAlt,
 } from "@fortawesome/free-solid-svg-icons";
 import { apiService } from "@/lib/api";
+
+const AUTO_REFRESH_MS = 10 * 60 * 1000; // 10 minutes
 
 export default function StatsCards() {
   const [monthlyData, setMonthlyData] = useState({
@@ -32,44 +35,54 @@ export default function StatsCards() {
     totalRentalsToday: 0,
     date: "",
   });
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const summaryRes = await apiService.getDashboardSummary();
+      const summary = summaryRes.data || {};
+      const daily = summary.daily || {};
+      const monthly = summary.monthly || {};
+
+      setRevenueData({
+        totalRevenueMonthly: monthly.totalRevenueMonthly || 0,
+        totalRentalsThisMonth: monthly.totalRentalsThisMonth || 0,
+        month: monthly.month || "",
+      });
+
+      setDailyRevenueData({
+        totalRevenueToday: daily.totalRevenueToday || 0,
+        totalRentalsToday: daily.totalRentalsToday || 0,
+        date: daily.date || "",
+      });
+
+      setMonthlyData({
+        month: monthly.month || "",
+        totalCustomersThisMonth: monthly.totalCustomersThisMonth || 0,
+        stations: monthly.stations || 0,
+      });
+
+      setDailyData({
+        date: daily.date || "",
+        totalCustomersToday: daily.totalCustomersToday || 0,
+        stations: daily.stations || 0,
+      });
+
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const summaryRes = await apiService.getDashboardSummary();
-        const summary = summaryRes.data || {};
-        const daily = summary.daily || {};
-        const monthly = summary.monthly || {};
-
-        setRevenueData({
-          totalRevenueMonthly: monthly.totalRevenueMonthly || 0,
-          totalRentalsThisMonth: monthly.totalRentalsThisMonth || 0,
-          month: monthly.month || "",
-        });
-
-        setDailyRevenueData({
-          totalRevenueToday: daily.totalRevenueToday || 0,
-          totalRentalsToday: daily.totalRentalsToday || 0,
-          date: daily.date || "",
-        });
-
-        setMonthlyData({
-          month: monthly.month || "",
-          totalCustomersThisMonth: monthly.totalCustomersThisMonth || 0,
-          stations: monthly.stations || 0,
-        });
-
-        setDailyData({
-          date: daily.date || "",
-          totalCustomersToday: daily.totalCustomersToday || 0,
-          stations: daily.stations || 0,
-        });
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      }
-    };
     fetchData();
-  }, []);
+    const interval = setInterval(fetchData, AUTO_REFRESH_MS);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const stats = [
     {
@@ -120,8 +133,36 @@ export default function StatsCards() {
     return colors[color] || "bg-blue-500";
   };
 
+  const formatLastUpdated = (date: Date) => {
+    const h = date.getHours().toString().padStart(2, "0");
+    const m = date.getMinutes().toString().padStart(2, "0");
+    const s = date.getSeconds().toString().padStart(2, "0");
+    return `${h}:${m}:${s}`;
+  };
+
   return (
     <>
+      {/* Refresh bar spanning full grid width */}
+      <div className="flex items-center justify-between col-span-1 md:col-span-2 lg:col-span-4">
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          {lastUpdated
+            ? `Last updated: ${formatLastUpdated(lastUpdated)}`
+            : "Loading..."}
+          {refreshing && " — Refreshing..."}
+        </p>
+        <button
+          onClick={fetchData}
+          disabled={refreshing}
+          className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-800"
+        >
+          <FontAwesomeIcon
+            icon={faSyncAlt}
+            className={refreshing ? "animate-spin" : ""}
+          />
+          Refresh
+        </button>
+      </div>
+
       {stats.map((stat, index) => (
         <div
           key={index}

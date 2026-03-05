@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faMapMarkerAlt,
@@ -201,12 +201,27 @@ export default function SlotsPage() {
     }
   };
 
-  const loadSlots = async () => {
+  const requestIdRef = useRef(0);
+
+  const loadSlots = useCallback(async () => {
     if (!selected) return;
-    setLoading(true);
+
+    // Immediately clear old data so stale info never shows
+    setSlots([]);
+    setStats({ total: 0, available: 0, rented: 0, overdue: 0 });
+    setStationInfo(null);
     setError("");
+    setLoading(true);
+
+    // Track this request to prevent race conditions
+    const currentRequestId = ++requestIdRef.current;
+
     try {
       const response = await apiService.getStationStats(selected);
+
+      // If user switched station while we were fetching, discard this response
+      if (currentRequestId !== requestIdRef.current) return;
+
       const station = response.data.station;
 
       if (!station) {
@@ -235,18 +250,22 @@ export default function SlotsPage() {
         setStationInfo(station);
       }
     } catch {
-      setError("Failed to load slots");
+      if (currentRequestId === requestIdRef.current) {
+        setError("Failed to load slots");
+      }
     } finally {
-      setLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, [selected]);
 
   useEffect(() => {
     loadStations();
   }, []);
   useEffect(() => {
     if (selected) loadSlots();
-  }, [selected]);
+  }, [selected, loadSlots]);
 
   const filtered = slots.filter(
     (s: any) =>

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/station-stats",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
