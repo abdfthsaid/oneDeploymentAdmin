@@ -11,7 +11,7 @@ import {
   faTimes,
   faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
-import { apiService } from "@/lib/api";
+import { apiService, apiClient } from "@/lib/api";
 import CustomAlert from "@/components/CustomAlert";
 
 export default function BlacklistPage() {
@@ -56,9 +56,14 @@ export default function BlacklistPage() {
   const fetchBlacklist = async (force = false) => {
     try {
       setLoading(true);
-      if (force) apiService.invalidateReadCache(["/api/blacklist"]);
-      const response = await apiService.getBlacklist();
-      setBlacklist(response.data.blacklist || response.data || []);
+      if (force) {
+        apiService.invalidateReadCache(["/api/blacklist"]);
+        const response = await apiClient.get("/api/blacklist?fresh=1");
+        setBlacklist(response.data.blacklist || response.data || []);
+      } else {
+        const response = await apiService.getBlacklist();
+        setBlacklist(response.data.blacklist || response.data || []);
+      }
       setError(null);
     } catch (err: any) {
       setError("Failed to fetch blacklist");
