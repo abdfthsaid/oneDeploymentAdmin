@@ -88,7 +88,7 @@ export default function StatsCards() {
     {
       title: `Total Revenue (${revenueData.month || "Month"})`,
       value: `$${revenueData.totalRevenueMonthly.toFixed(2)}`,
-      change: `${monthlyData.totalCustomersThisMonth}  customers`,
+      change: `${revenueData.totalRentalsThisMonth} rentals`,
       progress: 85,
       color: "blue",
       icon: (
@@ -98,7 +98,7 @@ export default function StatsCards() {
     {
       title: `Total Customers (${monthlyData.month || "Month"})`,
       value: monthlyData.totalCustomersThisMonth.toString(),
-      change: `${revenueData.totalRevenueMonthly}  revenue`,
+      change: `$${revenueData.totalRevenueMonthly.toFixed(2)} revenue`,
       progress: 78,
       color: "green",
       icon: <FontAwesomeIcon icon={faUsers} className="text-green-500" />,
@@ -106,7 +106,7 @@ export default function StatsCards() {
     {
       title: `Total Revenue (Today)`,
       value: `$${dailyRevenueData.totalRevenueToday.toFixed(2)}`,
-      change: `${dailyRevenueData.totalRentalsToday} customers`,
+      change: `${dailyRevenueData.totalRentalsToday} rentals`,
       progress: 60,
       color: "indigo",
       icon: <FontAwesomeIcon icon={faCalendar} className="text-indigo-500" />,
@@ -114,7 +114,7 @@ export default function StatsCards() {
     {
       title: `Total Customers (Today)`,
       value: dailyData.totalCustomersToday.toString(),
-      change: `${dailyRevenueData.totalRevenueToday}  revenue`,
+      change: `$${dailyRevenueData.totalRevenueToday.toFixed(2)} revenue`,
       progress: 40,
       color: "pink",
       icon: <FontAwesomeIcon icon={faCalendarDay} className="text-pink-500" />,
