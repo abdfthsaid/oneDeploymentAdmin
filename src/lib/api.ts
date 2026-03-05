@@ -1,7 +1,21 @@
-import axios from "axios";
+import axios, { AxiosResponse } from "axios";
 
 // API routes are served from the same Next.js app (serverless)
 const API_BASE_URL = "";
+
+const GET_TTL = {
+  SHORT: 20_000,
+  MEDIUM: 30_000,
+  LONG: 60_000,
+} as const;
+
+type CachedGetEntry = {
+  response: AxiosResponse<any>;
+  expiresAt: number;
+};
+
+const getResponseCache = new Map<string, CachedGetEntry>();
+const inFlightGetRequests = new Map<string, Promise<AxiosResponse<any>>>();
 
 export const API_ENDPOINTS = {
   // Users
@@ -26,6 +40,8 @@ export const API_ENDPOINTS = {
   MONTHLY_CUSTOMERS_BY_IMEI: "/api/customers/monthly-by-imei",
   DAILY_TOTAL_CUSTOMERS: "/api/customers/daily-total",
   MONTHLY_TOTAL_CUSTOMERS: "/api/customers/monthly-total",
+  // Dashboard
+  DASHBOARD_SUMMARY: "/api/dashboard/summary",
   // Charts
   CHARTS_BY_IMEI: "/api/charts",
   CHARTS_ALL: "/api/chartsAll/all",
@@ -38,7 +54,7 @@ export const API_ENDPOINTS = {
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000, // 15 seconds default
+  timeout: 15_000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -69,6 +85,7 @@ apiClient.interceptors.response.use(
             localStorage.removeItem("authToken");
             localStorage.removeItem("sessionUser");
             localStorage.removeItem("tokenExpiresAt");
+            clearApiGetCache();
             window.location.href = "/login";
           }
           break;
@@ -84,79 +101,211 @@ apiClient.interceptors.response.use(
   },
 );
 
-// Helper to build URL with query params
-function buildUrl(endpoint: string, params?: Record<string, string>): string {
-  if (!params) return endpoint;
-  const query = new URLSearchParams(params).toString();
-  return `${endpoint}?${query}`;
+function getAuthCacheSegment(): string {
+  if (typeof window === "undefined") return "server";
+  return localStorage.getItem("authToken") || "anonymous";
+}
+
+function buildGetCacheKey(endpoint: string): string {
+  return `${getAuthCacheSegment()}::${endpoint}`;
+}
+
+function extractEndpointFromCacheKey(cacheKey: string): string {
+  const separator = cacheKey.indexOf("::");
+  return separator === -1 ? cacheKey : cacheKey.slice(separator + 2);
+}
+
+function pruneExpiredGetCache(): void {
+  const now = Date.now();
+  for (const [key, entry] of Array.from(getResponseCache.entries())) {
+    if (entry.expiresAt <= now) {
+      getResponseCache.delete(key);
+    }
+  }
+}
+
+export function clearApiGetCache(): void {
+  getResponseCache.clear();
+  inFlightGetRequests.clear();
+}
+
+export function invalidateApiGetCachePrefixes(prefixes: string[]): void {
+  if (!prefixes.length) return;
+
+  for (const key of Array.from(getResponseCache.keys())) {
+    const endpoint = extractEndpointFromCacheKey(key);
+    if (prefixes.some((prefix) => endpoint.startsWith(prefix))) {
+      getResponseCache.delete(key);
+    }
+  }
+
+  for (const key of Array.from(inFlightGetRequests.keys())) {
+    const endpoint = extractEndpointFromCacheKey(key);
+    if (prefixes.some((prefix) => endpoint.startsWith(prefix))) {
+      inFlightGetRequests.delete(key);
+    }
+  }
+}
+
+async function cachedGet<T = any>(
+  endpoint: string,
+  ttlMs: number,
+): Promise<AxiosResponse<T>> {
+  if (ttlMs <= 0) {
+    return apiClient.get<T>(endpoint);
+  }
+
+  pruneExpiredGetCache();
+  const cacheKey = buildGetCacheKey(endpoint);
+  const cached = getResponseCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.response as AxiosResponse<T>;
+  }
+
+  const existingInFlight = inFlightGetRequests.get(cacheKey);
+  if (existingInFlight) {
+    return existingInFlight as Promise<AxiosResponse<T>>;
+  }
+
+  const requestPromise = apiClient
+    .get<T>(endpoint)
+    .then((response) => {
+      getResponseCache.set(cacheKey, {
+        response,
+        expiresAt: Date.now() + ttlMs,
+      });
+      return response;
+    })
+    .finally(() => {
+      inFlightGetRequests.delete(cacheKey);
+    });
+
+  inFlightGetRequests.set(cacheKey, requestPromise as Promise<AxiosResponse>);
+  return requestPromise;
+}
+
+function runMutation<T>(
+  request: Promise<AxiosResponse<T>>,
+  invalidationPrefixes: string[],
+): Promise<AxiosResponse<T>> {
+  return request.then((response) => {
+    invalidateApiGetCachePrefixes(invalidationPrefixes);
+    return response;
+  });
 }
 
 export const apiService = {
+  clearReadCache: clearApiGetCache,
+  invalidateReadCache: invalidateApiGetCachePrefixes,
+
   // Users
-  getUsers: () => apiClient.get(API_ENDPOINTS.USERS_ALL),
+  getUsers: () => cachedGet(API_ENDPOINTS.USERS_ALL, GET_TTL.MEDIUM),
   login: (credentials: { username: string; password: string }) =>
-    apiClient.post(API_ENDPOINTS.USERS_LOGIN, credentials, { timeout: 60000 }),
+    apiClient.post(API_ENDPOINTS.USERS_LOGIN, credentials, { timeout: 60_000 }),
   addUser: (userData: Record<string, unknown>) =>
-    apiClient.post(API_ENDPOINTS.USERS_ADD, userData),
+    runMutation(apiClient.post(API_ENDPOINTS.USERS_ADD, userData), [
+      API_ENDPOINTS.USERS_ALL,
+    ]),
   updateUser: (username: string, data: Record<string, unknown>) =>
-    apiClient.put(
-      `${API_ENDPOINTS.USERS_UPDATE}?username=${encodeURIComponent(username)}`,
-      data,
+    runMutation(
+      apiClient.put(
+        `${API_ENDPOINTS.USERS_UPDATE}?username=${encodeURIComponent(username)}`,
+        data,
+      ),
+      [API_ENDPOINTS.USERS_ALL],
     ),
   deleteUser: (id: string) =>
-    apiClient.delete(`${API_ENDPOINTS.USERS_DELETE}?id=${id}`),
+    runMutation(apiClient.delete(`${API_ENDPOINTS.USERS_DELETE}?id=${id}`), [
+      API_ENDPOINTS.USERS_ALL,
+    ]),
 
   // Stations
-  getStations: () => apiClient.get(API_ENDPOINTS.STATIONS_BASIC),
+  getStations: () => cachedGet(API_ENDPOINTS.STATIONS_BASIC, GET_TTL.LONG),
   addStation: (data: Record<string, unknown>) =>
-    apiClient.post(API_ENDPOINTS.STATIONS_ADD, data),
+    runMutation(apiClient.post(API_ENDPOINTS.STATIONS_ADD, data), [
+      "/api/stations",
+      API_ENDPOINTS.LATEST_TRANSACTIONS,
+    ]),
   updateStation: (id: string, data: Record<string, unknown>) =>
-    apiClient.put(`${API_ENDPOINTS.STATIONS_UPDATE}/${id}`, data),
+    runMutation(apiClient.put(`${API_ENDPOINTS.STATIONS_UPDATE}/${id}`, data), [
+      "/api/stations",
+      API_ENDPOINTS.LATEST_TRANSACTIONS,
+    ]),
   deleteStation: (imei: string) =>
-    apiClient.delete(`${API_ENDPOINTS.STATIONS_DELETE}/${imei}`),
+    runMutation(apiClient.delete(`${API_ENDPOINTS.STATIONS_DELETE}/${imei}`), [
+      "/api/stations",
+      API_ENDPOINTS.LATEST_TRANSACTIONS,
+    ]),
   getStationStats: (imei: string) =>
-    apiClient.get(`${API_ENDPOINTS.STATIONS_STATS}/${imei}`),
+    cachedGet(`${API_ENDPOINTS.STATIONS_STATS}/${imei}`, GET_TTL.SHORT),
 
   // Transactions
-  getLatestTransactions: () => apiClient.get(API_ENDPOINTS.LATEST_TRANSACTIONS),
+  getLatestTransactions: () =>
+    cachedGet(API_ENDPOINTS.LATEST_TRANSACTIONS, GET_TTL.SHORT),
 
   // Revenue
   getDailyRevenue: (imei?: string) =>
     imei
-      ? apiClient.get(`${API_ENDPOINTS.DAILY_REVENUE}/${imei}`)
-      : apiClient.get(API_ENDPOINTS.DAILY_REVENUE),
+      ? cachedGet(`${API_ENDPOINTS.DAILY_REVENUE}/${imei}`, GET_TTL.MEDIUM)
+      : cachedGet(API_ENDPOINTS.DAILY_REVENUE, GET_TTL.MEDIUM),
   getMonthlyRevenue: (imei?: string) =>
     imei
-      ? apiClient.get(`${API_ENDPOINTS.MONTHLY_REVENUE}/${imei}`)
-      : apiClient.get(API_ENDPOINTS.MONTHLY_REVENUE),
-  getAllDailyRevenue: () => apiClient.get(API_ENDPOINTS.DAILY_REVENUE),
-  getAllMonthlyRevenue: () => apiClient.get(API_ENDPOINTS.MONTHLY_REVENUE),
+      ? cachedGet(`${API_ENDPOINTS.MONTHLY_REVENUE}/${imei}`, GET_TTL.MEDIUM)
+      : cachedGet(API_ENDPOINTS.MONTHLY_REVENUE, GET_TTL.MEDIUM),
+  getAllDailyRevenue: () =>
+    cachedGet(API_ENDPOINTS.DAILY_REVENUE, GET_TTL.MEDIUM),
+  getAllMonthlyRevenue: () =>
+    cachedGet(API_ENDPOINTS.MONTHLY_REVENUE, GET_TTL.MEDIUM),
 
   // Customers
   getDailyCustomers: (imei: string) =>
-    apiClient.get(`${API_ENDPOINTS.DAILY_CUSTOMERS_BY_IMEI}/${imei}`),
+    cachedGet(`${API_ENDPOINTS.DAILY_CUSTOMERS_BY_IMEI}/${imei}`, GET_TTL.MEDIUM),
   getMonthlyCustomers: (imei: string) =>
-    apiClient.get(`${API_ENDPOINTS.MONTHLY_CUSTOMERS_BY_IMEI}/${imei}`),
+    cachedGet(
+      `${API_ENDPOINTS.MONTHLY_CUSTOMERS_BY_IMEI}/${imei}`,
+      GET_TTL.MEDIUM,
+    ),
   getDailyTotalCustomers: () =>
-    apiClient.get(API_ENDPOINTS.DAILY_TOTAL_CUSTOMERS),
+    cachedGet(API_ENDPOINTS.DAILY_TOTAL_CUSTOMERS, GET_TTL.MEDIUM),
   getMonthlyTotalCustomers: () =>
-    apiClient.get(API_ENDPOINTS.MONTHLY_TOTAL_CUSTOMERS),
+    cachedGet(API_ENDPOINTS.MONTHLY_TOTAL_CUSTOMERS, GET_TTL.MEDIUM),
+
+  // Dashboard
+  getDashboardSummary: () =>
+    cachedGet(API_ENDPOINTS.DASHBOARD_SUMMARY, GET_TTL.MEDIUM),
 
   // Charts
   getChartsByImei: (imei: string) =>
-    apiClient.get(`${API_ENDPOINTS.CHARTS_BY_IMEI}/${imei}`),
-  getAllCharts: () => apiClient.get(API_ENDPOINTS.CHARTS_ALL),
+    cachedGet(`${API_ENDPOINTS.CHARTS_BY_IMEI}/${imei}`, GET_TTL.LONG),
+  getAllCharts: () => cachedGet(API_ENDPOINTS.CHARTS_ALL, GET_TTL.LONG),
 
   // Blacklist
-  getBlacklist: () => apiClient.get(API_ENDPOINTS.BLACKLIST),
+  getBlacklist: () => cachedGet(API_ENDPOINTS.BLACKLIST, GET_TTL.MEDIUM),
   addToBlacklist: (data: Record<string, unknown>) =>
-    apiClient.post(API_ENDPOINTS.BLACKLIST, data),
+    runMutation(apiClient.post(API_ENDPOINTS.BLACKLIST, data), [
+      API_ENDPOINTS.BLACKLIST,
+      API_ENDPOINTS.BLACKLIST_CHECK,
+    ]),
   checkBlacklist: (phoneNumber: string) =>
-    apiClient.get(`${API_ENDPOINTS.BLACKLIST_CHECK}/${phoneNumber}`),
+    cachedGet(`${API_ENDPOINTS.BLACKLIST_CHECK}/${phoneNumber}`, GET_TTL.SHORT),
   removeFromBlacklist: (id: string) =>
-    apiClient.delete(`${API_ENDPOINTS.BLACKLIST}/${id}`),
+    runMutation(apiClient.delete(`${API_ENDPOINTS.BLACKLIST}/${id}`), [
+      API_ENDPOINTS.BLACKLIST,
+      API_ENDPOINTS.BLACKLIST_CHECK,
+    ]),
 
   // Payment
   processPayment: (stationCode: string, data: Record<string, unknown>) =>
-    apiClient.post(`${API_ENDPOINTS.PAYMENT_PROCESS}/${stationCode}`, data),
+    runMutation(
+      apiClient.post(`${API_ENDPOINTS.PAYMENT_PROCESS}/${stationCode}`, data),
+      [
+        API_ENDPOINTS.LATEST_TRANSACTIONS,
+        API_ENDPOINTS.DASHBOARD_SUMMARY,
+        "/api/revenue",
+        "/api/customers",
+        "/api/charts",
+        API_ENDPOINTS.CHARTS_ALL,
+      ],
+    ),
 };

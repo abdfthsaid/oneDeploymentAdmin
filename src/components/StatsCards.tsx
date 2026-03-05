@@ -36,17 +36,34 @@ export default function StatsCards() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [revenueRes, dailyRevRes, monthlyRes, dailyRes] =
-          await Promise.all([
-            apiService.getAllMonthlyRevenue(),
-            apiService.getAllDailyRevenue(),
-            apiService.getMonthlyTotalCustomers(),
-            apiService.getDailyTotalCustomers(),
-          ]);
-        setRevenueData(revenueRes.data);
-        setDailyRevenueData(dailyRevRes.data);
-        setMonthlyData(monthlyRes.data);
-        setDailyData(dailyRes.data);
+        const summaryRes = await apiService.getDashboardSummary();
+        const summary = summaryRes.data || {};
+        const daily = summary.daily || {};
+        const monthly = summary.monthly || {};
+
+        setRevenueData({
+          totalRevenueMonthly: monthly.totalRevenueMonthly || 0,
+          totalRentalsThisMonth: monthly.totalRentalsThisMonth || 0,
+          month: monthly.month || "",
+        });
+
+        setDailyRevenueData({
+          totalRevenueToday: daily.totalRevenueToday || 0,
+          totalRentalsToday: daily.totalRentalsToday || 0,
+          date: daily.date || "",
+        });
+
+        setMonthlyData({
+          month: monthly.month || "",
+          totalCustomersThisMonth: monthly.totalCustomersThisMonth || 0,
+          stations: monthly.stations || 0,
+        });
+
+        setDailyData({
+          date: daily.date || "",
+          totalCustomersToday: daily.totalCustomersToday || 0,
+          stations: daily.stations || 0,
+        });
       } catch (error) {
         console.error("Failed to fetch data:", error);
       }

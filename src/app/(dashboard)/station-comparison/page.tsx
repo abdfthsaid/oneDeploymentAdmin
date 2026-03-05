@@ -50,7 +50,8 @@ export default function StationComparisonPage() {
         const response = await apiService.getStations();
         const fetched = response.data.stations || [];
         setStations(fetched);
-        setSelectedStations(fetched.map((s: any) => s.imei));
+        // Default to a small set for faster first render; users can still select all.
+        setSelectedStations(fetched.slice(0, 2).map((s: any) => s.imei));
       } catch {
         setError('Failed to fetch stations');
       } finally {

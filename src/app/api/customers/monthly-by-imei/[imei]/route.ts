@@ -3,6 +3,9 @@ import db from '@/lib/firebase-admin';
 import { admin } from '@/lib/firebase-admin';
 import { authenticateRequest, requireRole, TokenPayload } from '@/lib/auth';
 import { getMonthBoundsUTC3 } from '@/lib/timeUtils';
+import { cacheComponent, buildPrivateCacheControl } from '@/lib/cacheComponent';
+
+const CACHE_TTL_MS = 30_000;
 
 export async function GET(req: NextRequest, { params }: { params: { imei: string } }) {
   const auth = authenticateRequest(req);
@@ -14,25 +17,37 @@ export async function GET(req: NextRequest, { params }: { params: { imei: string
   const { startUtc, monthKey } = getMonthBoundsUTC3();
 
   try {
-    const Timestamp = admin.firestore.Timestamp;
-    const snapshot = await db
-      .collection('rentals')
-      .where('imei', '==', imei)
-      .where('timestamp', '>=', Timestamp.fromDate(startUtc))
-      .where('status', 'in', ['rented', 'returned'])
-      .get();
+    const payload = await cacheComponent.remember(
+      `customers:monthly:imei:${imei}:${monthKey}`,
+      CACHE_TTL_MS,
+      async () => {
+        const Timestamp = admin.firestore.Timestamp;
+        const snapshot = await db
+          .collection('rentals')
+          .where('imei', '==', imei)
+          .where('timestamp', '>=', Timestamp.fromDate(startUtc))
+          .where('status', 'in', ['rented', 'returned'])
+          .get();
 
-    const phones = new Set<string>();
-    snapshot.forEach((doc: any) => {
-      const num = doc.data().phoneNumber;
-      if (num) phones.add(num);
-    });
+        const phones = new Set<string>();
+        snapshot.forEach((doc: any) => {
+          const num = doc.data().phoneNumber;
+          if (num) phones.add(num);
+        });
 
-    return NextResponse.json({
-      imei,
-      month: monthKey,
-      totalCustomersThisMonth: phones.size,
-      totalRentalsThisMonth: snapshot.size,
+        return {
+          imei,
+          month: monthKey,
+          totalCustomersThisMonth: phones.size,
+          totalRentalsThisMonth: snapshot.size,
+        };
+      },
+    );
+
+    return NextResponse.json(payload, {
+      headers: {
+        'Cache-Control': buildPrivateCacheControl(CACHE_TTL_MS),
+      },
     });
   } catch (err: any) {
     console.error('❌ Monthly customer error:', err);

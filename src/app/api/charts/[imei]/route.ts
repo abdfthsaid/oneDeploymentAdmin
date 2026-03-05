@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
 import { applyRevenueCuts } from "@/lib/timeUtils";
+import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
+
+const CACHE_TTL_MS = 60_000;
 
 const imeiToStationCode: Record<string, string> = {
   WSEP161721195358: "58",
@@ -47,85 +50,101 @@ export async function GET(
       return NextResponse.json({ error: "Invalid IMEI" }, { status: 400 });
     }
 
-    const snapshot = await db
-      .collection("rentals")
-      .where("stationCode", "==", stationCode)
-      .where("status", "in", ["rented", "returned"])
-      .get();
+    const payload = await cacheComponent.remember(
+      `charts:imei:${imei}`,
+      CACHE_TTL_MS,
+      async () => {
+        const snapshot = await db
+          .collection("rentals")
+          .where("stationCode", "==", stationCode)
+          .where("status", "in", ["rented", "returned"])
+          .get();
 
-    const dailyRev: Record<string, number> = {};
-    const weeklyRev: Record<string, number> = {};
-    const monthlyRev: Record<string, number> = {};
-    const dailyCust: Record<string, Set<string>> = {};
-    const weeklyCust: Record<string, Set<string>> = {};
-    const monthlyCust: Record<string, Set<string>> = {};
+        const dailyRev: Record<string, number> = {};
+        const weeklyRev: Record<string, number> = {};
+        const monthlyRev: Record<string, number> = {};
+        const dailyCust: Record<string, Set<string>> = {};
+        const weeklyCust: Record<string, Set<string>> = {};
+        const monthlyCust: Record<string, Set<string>> = {};
 
-    snapshot.forEach((doc: any) => {
-      const r = doc.data();
-      if (!r.timestamp) return;
+        snapshot.forEach((doc: any) => {
+          const r = doc.data();
+          if (!r.timestamp) return;
 
-      const ts = r.timestamp.toDate();
-      const day = isoDate(ts);
-      const week = `Week ${getWeekNumber(ts)}`;
-      const month = ts.toLocaleString("default", {
-        year: "numeric",
-        month: "long",
-      });
+          const ts = r.timestamp.toDate();
+          const day = isoDate(ts);
+          const week = `Week ${getWeekNumber(ts)}`;
+          const month = ts.toLocaleString("default", {
+            year: "numeric",
+            month: "long",
+          });
 
-      const rawAmt = parseFloat(r.amount) || 0;
-      const amt = rawAmt > 0 ? applyRevenueCuts(rawAmt) : 0;
-      const phone = r.phoneNumber || "";
+          const rawAmt = parseFloat(r.amount) || 0;
+          const amt = rawAmt > 0 ? applyRevenueCuts(rawAmt) : 0;
+          const phone = r.phoneNumber || "";
 
-      dailyRev[day] = (dailyRev[day] || 0) + amt;
-      weeklyRev[week] = (weeklyRev[week] || 0) + amt;
-      monthlyRev[month] = (monthlyRev[month] || 0) + amt;
+          dailyRev[day] = (dailyRev[day] || 0) + amt;
+          weeklyRev[week] = (weeklyRev[week] || 0) + amt;
+          monthlyRev[month] = (monthlyRev[month] || 0) + amt;
 
-      dailyCust[day] = dailyCust[day] || new Set();
-      weeklyCust[week] = weeklyCust[week] || new Set();
-      monthlyCust[month] = monthlyCust[month] || new Set();
+          dailyCust[day] = dailyCust[day] || new Set();
+          weeklyCust[week] = weeklyCust[week] || new Set();
+          monthlyCust[month] = monthlyCust[month] || new Set();
 
-      dailyCust[day].add(phone);
-      weeklyCust[week].add(phone);
-      monthlyCust[month].add(phone);
-    });
+          dailyCust[day].add(phone);
+          weeklyCust[week].add(phone);
+          monthlyCust[month].add(phone);
+        });
 
-    const build = (
-      rev: Record<string, number>,
-      cust: Record<string, Set<string>>,
-    ) => ({
-      labels: Object.keys(rev).sort(),
-      data: Object.keys(rev)
-        .sort()
-        .map((k) => rev[k]),
-      customers: Object.keys(cust)
-        .sort()
-        .map((k) => cust[k].size),
-    });
+        const build = (
+          rev: Record<string, number>,
+          cust: Record<string, Set<string>>,
+        ) => ({
+          labels: Object.keys(rev).sort(),
+          data: Object.keys(rev)
+            .sort()
+            .map((k) => rev[k]),
+          customers: Object.keys(cust)
+            .sort()
+            .map((k) => cust[k].size),
+        });
 
-    return NextResponse.json({
-      dailyRevenue: {
-        labels: build(dailyRev, dailyCust).labels,
-        data: build(dailyRev, dailyCust).data,
+        const daily = build(dailyRev, dailyCust);
+        const weekly = build(weeklyRev, weeklyCust);
+        const monthly = build(monthlyRev, monthlyCust);
+
+        return {
+          dailyRevenue: {
+            labels: daily.labels,
+            data: daily.data,
+          },
+          weeklyRevenue: {
+            labels: weekly.labels,
+            data: weekly.data,
+          },
+          monthlyRevenue: {
+            labels: monthly.labels,
+            data: monthly.data,
+          },
+          dailyCustomers: {
+            labels: daily.labels,
+            data: daily.customers,
+          },
+          weeklyCustomers: {
+            labels: weekly.labels,
+            data: weekly.customers,
+          },
+          monthlyCustomers: {
+            labels: monthly.labels,
+            data: monthly.customers,
+          },
+        };
       },
-      weeklyRevenue: {
-        labels: build(weeklyRev, weeklyCust).labels,
-        data: build(weeklyRev, weeklyCust).data,
-      },
-      monthlyRevenue: {
-        labels: build(monthlyRev, monthlyCust).labels,
-        data: build(monthlyRev, monthlyCust).data,
-      },
-      dailyCustomers: {
-        labels: build(dailyRev, dailyCust).labels,
-        data: build(dailyRev, dailyCust).customers,
-      },
-      weeklyCustomers: {
-        labels: build(weeklyRev, weeklyCust).labels,
-        data: build(weeklyRev, weeklyCust).customers,
-      },
-      monthlyCustomers: {
-        labels: build(monthlyRev, monthlyCust).labels,
-        data: build(monthlyRev, monthlyCust).customers,
+    );
+
+    return NextResponse.json(payload, {
+      headers: {
+        "Cache-Control": buildPrivateCacheControl(CACHE_TTL_MS),
       },
     });
   } catch (err: any) {

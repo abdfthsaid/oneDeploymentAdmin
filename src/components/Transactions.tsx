@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useDataStore } from "@/stores/useDataStore";
 
 interface TransactionsProps {
@@ -13,15 +14,19 @@ export default function Transactions({
 }: TransactionsProps) {
   const { transactions, stations, loading, error } = useDataStore();
 
+  const stationNameByKey = useMemo(() => {
+    const map: Record<string, string> = {};
+    stations.forEach((station: any) => {
+      if (station?.imei) map[station.imei] = station.name || station.imei;
+      if (station?.id) map[station.id] = station.name || station.id;
+      if (station?.name) map[station.name] = station.name;
+    });
+    return map;
+  }, [stations]);
+
   const getStationName = (stationCode: string) => {
     if (!stationCode) return "";
-    const station = stations.find(
-      (s: any) =>
-        s.imei === stationCode ||
-        s.id === stationCode ||
-        s.name === stationCode,
-    );
-    return station ? station.name : "";
+    return stationNameByKey[stationCode] || "";
   };
 
   const formatTimestamp = (timestamp: any) => {
@@ -67,7 +72,10 @@ export default function Transactions({
     return phone;
   };
 
-  const visibleTransactions = showAll ? transactions : transactions.slice(0, 3);
+  const visibleTransactions = useMemo(
+    () => (showAll ? transactions : transactions.slice(0, 3)),
+    [showAll, transactions],
+  );
 
   if (loading) {
     return (

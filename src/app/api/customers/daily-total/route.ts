@@ -3,6 +3,9 @@ import db from "@/lib/firebase-admin";
 import { admin } from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
 import { getDayBoundsUTC3 } from "@/lib/timeUtils";
+import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
+
+const CACHE_TTL_MS = 30_000;
 
 export async function GET(req: NextRequest) {
   const auth = authenticateRequest(req);
@@ -36,38 +39,52 @@ export async function GET(req: NextRequest) {
   };
 
   try {
-    const Timestamp = admin.firestore.Timestamp;
-    const snapshot = await db
-      .collection("rentals")
-      .where("timestamp", ">=", Timestamp.fromDate(startUtc))
-      .where("status", "in", ["rented", "returned"])
-      .get();
+    const payload = await cacheComponent.remember(
+      `customers:daily:all:${dateStr}`,
+      CACHE_TTL_MS,
+      async () => {
+        const Timestamp = admin.firestore.Timestamp;
+        const snapshot = await db
+          .collection("rentals")
+          .where("timestamp", ">=", Timestamp.fromDate(startUtc))
+          .where("status", "in", ["rented", "returned"])
+          .get();
 
-    let result = countFromSnapshot(snapshot);
-    let usedDate = dateStr;
+        let result = countFromSnapshot(snapshot);
+        let usedDate = dateStr;
 
-    // If no customers today, show yesterday's data as fallback
-    if (result.customers === 0) {
-      const yesterdayStart = new Date(startUtc.getTime() - 24 * 60 * 60 * 1000);
-      const yesterdaySnap = await db
-        .collection("rentals")
-        .where("timestamp", ">=", Timestamp.fromDate(yesterdayStart))
-        .where("timestamp", "<", Timestamp.fromDate(startUtc))
-        .where("status", "in", ["rented", "returned"])
-        .get();
-      const yResult = countFromSnapshot(yesterdaySnap);
-      if (yResult.customers > 0) {
-        result = yResult;
-        const yd = new Date(yesterdayStart.getTime() + 3 * 60 * 60 * 1000);
-        usedDate = `${yd.getUTCFullYear()}-${String(yd.getUTCMonth() + 1).padStart(2, "0")}-${String(yd.getUTCDate()).padStart(2, "0")}`;
-      }
-    }
+        // If no customers today, show yesterday's data as fallback
+        if (result.customers === 0) {
+          const yesterdayStart = new Date(
+            startUtc.getTime() - 24 * 60 * 60 * 1000,
+          );
+          const yesterdaySnap = await db
+            .collection("rentals")
+            .where("timestamp", ">=", Timestamp.fromDate(yesterdayStart))
+            .where("timestamp", "<", Timestamp.fromDate(startUtc))
+            .where("status", "in", ["rented", "returned"])
+            .get();
+          const yResult = countFromSnapshot(yesterdaySnap);
+          if (yResult.customers > 0) {
+            result = yResult;
+            const yd = new Date(yesterdayStart.getTime() + 3 * 60 * 60 * 1000);
+            usedDate = `${yd.getUTCFullYear()}-${String(yd.getUTCMonth() + 1).padStart(2, "0")}-${String(yd.getUTCDate()).padStart(2, "0")}`;
+          }
+        }
 
-    return NextResponse.json({
-      date: usedDate,
-      totalCustomersToday: result.customers,
-      totalRentalsToday: result.rentals,
-      stations: result.stations,
+        return {
+          date: usedDate,
+          totalCustomersToday: result.customers,
+          totalRentalsToday: result.rentals,
+          stations: result.stations,
+        };
+      },
+    );
+
+    return NextResponse.json(payload, {
+      headers: {
+        "Cache-Control": buildPrivateCacheControl(CACHE_TTL_MS),
+      },
     });
   } catch (err: any) {
     console.error("❌ Daily-total error:", err);

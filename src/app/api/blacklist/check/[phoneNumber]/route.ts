@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/firebase-admin';
 import { authenticateRequest } from '@/lib/auth';
+import { cacheComponent, buildPrivateCacheControl } from '@/lib/cacheComponent';
+
+const CACHE_TTL_MS = 20_000;
 
 function normalizePhone(phone: string): string {
   const digits = (phone || '').replace(/\D/g, '');
@@ -19,15 +22,27 @@ export async function GET(req: NextRequest, { params }: { params: { phoneNumber:
   }
 
   try {
-    const snapshot = await db
-      .collection('blacklist')
-      .where('normalizedPhone', '==', normalized)
-      .limit(1)
-      .get();
+    const payload = await cacheComponent.remember(
+      `blacklist:check:${normalized}`,
+      CACHE_TTL_MS,
+      async () => {
+        const snapshot = await db
+          .collection('blacklist')
+          .where('normalizedPhone', '==', normalized)
+          .limit(1)
+          .get();
 
-    return NextResponse.json({
-      phoneNumber,
-      isBlacklisted: !snapshot.empty,
+        return {
+          phoneNumber,
+          isBlacklisted: !snapshot.empty,
+        };
+      },
+    );
+
+    return NextResponse.json(payload, {
+      headers: {
+        'Cache-Control': buildPrivateCacheControl(CACHE_TTL_MS),
+      },
     });
   } catch (err: any) {
     console.error('❌ Error checking blacklist:', err);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/firebase-admin';
 import { authenticateRequest, requireRole, TokenPayload } from '@/lib/auth';
+import { cacheComponent } from '@/lib/cacheComponent';
 
 export async function POST(req: NextRequest) {
   const auth = authenticateRequest(req);
@@ -42,6 +43,8 @@ export async function POST(req: NextRequest) {
       email,
       createdAt: new Date(),
     });
+
+    cacheComponent.invalidatePrefix('users:');
 
     return NextResponse.json({ message: 'User added ✅', id: newUserRef.id }, { status: 201 });
   } catch (error: any) {

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { User } from "@/lib/utils/permissions";
+import { clearApiGetCache } from "@/lib/api";
 
 interface AuthState {
   user: User | null;
@@ -19,6 +20,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   setUser: (user) => set({ user }),
 
   login: (user, token, expiresAt) => {
+    clearApiGetCache();
     if (typeof window !== "undefined") {
       localStorage.setItem("sessionUser", JSON.stringify(user));
       localStorage.setItem("authToken", token);
@@ -28,6 +30,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
+    clearApiGetCache();
     if (typeof window !== "undefined") {
       localStorage.removeItem("sessionUser");
       localStorage.removeItem("authToken");
@@ -63,6 +66,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         }, timeUntilExpiry);
       } else {
         // Token expired
+        clearApiGetCache();
         localStorage.removeItem("sessionUser");
         localStorage.removeItem("authToken");
         localStorage.removeItem("tokenExpiresAt");

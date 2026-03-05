@@ -46,6 +46,15 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
   const [searchResults, setSearchResults] = useState<any[]>([]);
 
   const userIsAdmin = isAdmin(user);
+  const stationNameByKey = useMemo(() => {
+    const map: Record<string, string> = {};
+    stations.forEach((station: any) => {
+      if (station?.imei) map[station.imei] = station.name || station.imei;
+      if (station?.id) map[station.id] = station.name || station.id;
+      if (station?.name) map[station.name] = station.name;
+    });
+    return map;
+  }, [stations]);
 
   const notificationRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -143,11 +152,17 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
     setSearchResults(results.slice(0, 10));
   };
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      performSearch(searchQuery);
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [searchQuery, stations, contextUsers, transactions, userIsAdmin]);
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchQuery(query);
-    performSearch(query);
-    setSearchOpen(query.length > 0);
+    setSearchOpen(query.trim().length > 0);
   };
 
   const handleSearchResultClick = (result: any) => {
@@ -195,10 +210,10 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
         return hoursDiff <= 2;
       });
 
-      const generated = recentTransactions.map((tx: any) => ({
+        const generated = recentTransactions.map((tx: any) => ({
         id: `recent-${tx.id}`,
         title: "New Transaction",
-        description: `Station: ${tx.stationName} | Amount: $${tx.amount} | Power Bank: ${tx.battery_id}`,
+        description: `Station: ${stationNameByKey[tx.stationName] || tx.stationName} | Amount: $${tx.amount} | Power Bank: ${tx.battery_id}`,
         time: formatTimestamp(tx.timestamp),
         type: "success",
         icon: faCheckCircle,
@@ -206,7 +221,7 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
       setNotifications(generated.slice(0, 5));
       setLoading(false);
     }
-  }, [transactions, contextLoading]);
+  }, [transactions, contextLoading, stationNameByKey]);
 
   const formatTimestamp = (timestamp: any) => {
     if (!timestamp || !timestamp._seconds) return "Unknown time";

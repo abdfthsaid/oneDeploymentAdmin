@@ -1,6 +1,7 @@
 import { admin } from './firebase-admin';
 import db from './firebase-admin';
 import axios from 'axios';
+import { cacheComponent } from './cacheComponent';
 
 const MACHINE_CAPACITY = 8;
 const STATIONS = [
@@ -200,6 +201,12 @@ export async function updateStationStats() {
     }
   }
 
+  cacheComponent.invalidatePrefix('stations:stats:');
+  cacheComponent.invalidatePrefix('revenue:');
+  cacheComponent.invalidatePrefix('customers:');
+  cacheComponent.invalidatePrefix('charts:');
+  cacheComponent.invalidate('transactions:latest');
+  cacheComponent.invalidatePrefix('dashboard:summary:');
   console.log(`📊 Station stats update complete: ${successCount} succeeded, ${failureCount} failed out of ${STATIONS.length} total`);
 
   return { success: true, successCount, failureCount, total: STATIONS.length };

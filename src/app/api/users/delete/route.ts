@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/firebase-admin';
 import { authenticateRequest, requireRole, TokenPayload } from '@/lib/auth';
+import { cacheComponent } from '@/lib/cacheComponent';
 
 export async function DELETE(req: NextRequest) {
   const auth = authenticateRequest(req);
@@ -35,6 +36,7 @@ export async function DELETE(req: NextRequest) {
       await snap.docs[0].ref.delete();
     }
 
+    cacheComponent.invalidatePrefix('users:');
     return NextResponse.json({ message: 'User deleted successfully ✅' });
   } catch (error: any) {
     console.error('Delete user error:', error);

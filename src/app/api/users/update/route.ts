@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
+import { cacheComponent } from "@/lib/cacheComponent";
 
 export async function PUT(req: NextRequest) {
   const auth = authenticateRequest(req);
@@ -87,6 +88,7 @@ export async function PUT(req: NextRequest) {
     }
 
     await userDocRef.update({ ...updates, updatedAt: new Date() });
+    cacheComponent.invalidatePrefix("users:");
     return NextResponse.json({ message: "User updated successfully ✅" });
   } catch (error: any) {
     console.error("Update user error:", error);

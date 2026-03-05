@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/firebase-admin';
 import { authenticateRequest, requireRole, TokenPayload } from '@/lib/auth';
+import { cacheComponent } from '@/lib/cacheComponent';
 
 export async function PUT(req: NextRequest, { params }: { params: { imei: string } }) {
   const auth = authenticateRequest(req);
@@ -20,6 +21,8 @@ export async function PUT(req: NextRequest, { params }: { params: { imei: string
     }
 
     await stationRef.update({ ...updates, updatedAt: new Date() });
+    cacheComponent.invalidatePrefix('stations:');
+    cacheComponent.invalidate('transactions:latest');
     return NextResponse.json({ message: 'Station updated successfully ✅' });
   } catch (error: any) {
     console.error('Update Error:', error);

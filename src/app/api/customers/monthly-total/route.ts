@@ -3,6 +3,9 @@ import db from '@/lib/firebase-admin';
 import { admin } from '@/lib/firebase-admin';
 import { authenticateRequest, requireRole, TokenPayload } from '@/lib/auth';
 import { getMonthBoundsUTC3 } from '@/lib/timeUtils';
+import { cacheComponent, buildPrivateCacheControl } from '@/lib/cacheComponent';
+
+const CACHE_TTL_MS = 30_000;
 
 export async function GET(req: NextRequest) {
   const auth = authenticateRequest(req);
@@ -13,31 +16,43 @@ export async function GET(req: NextRequest) {
   const { startUtc, monthKey } = getMonthBoundsUTC3();
 
   try {
-    const Timestamp = admin.firestore.Timestamp;
-    const snapshot = await db
-      .collection('rentals')
-      .where('timestamp', '>=', Timestamp.fromDate(startUtc))
-      .where('status', 'in', ['rented', 'returned'])
-      .get();
+    const payload = await cacheComponent.remember(
+      `customers:monthly:all:${monthKey}`,
+      CACHE_TTL_MS,
+      async () => {
+        const Timestamp = admin.firestore.Timestamp;
+        const snapshot = await db
+          .collection('rentals')
+          .where('timestamp', '>=', Timestamp.fromDate(startUtc))
+          .where('status', 'in', ['rented', 'returned'])
+          .get();
 
-    const uniqueCustomers = new Set<string>();
-    const stationSet = new Set<string>();
-    const uniqueTransactions = new Set<string>();
+        const uniqueCustomers = new Set<string>();
+        const stationSet = new Set<string>();
+        const uniqueTransactions = new Set<string>();
 
-    snapshot.forEach((doc: any) => {
-      const data = doc.data();
-      const txId = data.transactionId || doc.id;
-      if (uniqueTransactions.has(txId)) return;
-      uniqueTransactions.add(txId);
-      if (data.phoneNumber) uniqueCustomers.add(data.phoneNumber);
-      if (data.imei) stationSet.add(data.imei);
-    });
+        snapshot.forEach((doc: any) => {
+          const data = doc.data();
+          const txId = data.transactionId || doc.id;
+          if (uniqueTransactions.has(txId)) return;
+          uniqueTransactions.add(txId);
+          if (data.phoneNumber) uniqueCustomers.add(data.phoneNumber);
+          if (data.imei) stationSet.add(data.imei);
+        });
 
-    return NextResponse.json({
-      month: monthKey,
-      totalCustomersThisMonth: uniqueCustomers.size,
-      totalRentalsThisMonth: uniqueTransactions.size,
-      stations: stationSet.size,
+        return {
+          month: monthKey,
+          totalCustomersThisMonth: uniqueCustomers.size,
+          totalRentalsThisMonth: uniqueTransactions.size,
+          stations: stationSet.size,
+        };
+      },
+    );
+
+    return NextResponse.json(payload, {
+      headers: {
+        'Cache-Control': buildPrivateCacheControl(CACHE_TTL_MS),
+      },
     });
   } catch (err: any) {
     console.error('❌ Monthly-total error:', err);

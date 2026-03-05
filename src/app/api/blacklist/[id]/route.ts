@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/firebase-admin';
 import { authenticateRequest, requireRole, TokenPayload } from '@/lib/auth';
+import { cacheComponent } from '@/lib/cacheComponent';
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = authenticateRequest(req);
@@ -20,6 +21,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     console.log(`🗑️ Blacklist entry deleted by: ${user.username} (${user.role})`);
 
     await db.collection('blacklist').doc(id).delete();
+    cacheComponent.invalidatePrefix('blacklist:');
 
     return NextResponse.json({
       success: true,

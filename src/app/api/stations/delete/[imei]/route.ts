@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/firebase-admin';
 import { authenticateRequest, requireRole, TokenPayload } from '@/lib/auth';
+import { cacheComponent } from '@/lib/cacheComponent';
 
 export async function DELETE(req: NextRequest, { params }: { params: { imei: string } }) {
   const auth = authenticateRequest(req);
@@ -18,6 +19,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { imei: str
     }
 
     await stationRef.delete();
+    cacheComponent.invalidatePrefix('stations:');
+    cacheComponent.invalidate('transactions:latest');
     return NextResponse.json({ message: 'Station deleted successfully 🗑️✅' });
   } catch (error: any) {
     console.error('Delete Error:', error);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateStationStats } from '@/lib/stationStatsJob';
+import { cacheComponent } from '@/lib/cacheComponent';
 
 // Secret to protect the cron endpoint
 const CRON_SECRET = process.env.CRON_SECRET || process.env.JWT_SECRET || '';
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
   try {
     console.log('⏱️ Cron: Updating station stats...');
     const result = await updateStationStats();
+    cacheComponent.invalidatePrefix('stations:stats:');
     return NextResponse.json({ 
       message: 'Station stats updated',
       ...result,
