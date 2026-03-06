@@ -231,10 +231,6 @@ export async function updateSingleStation(imei: string) {
         batteries: slots,
       });
 
-    console.log(
-      `✅ Updated ${imei}: total=${totalSlots} avail=${availableCount} rented=${rentedCount} overdue=${overdueCount}`,
-    );
-
     cacheComponent.invalidatePrefix("stations:stats:");
     cacheComponent.invalidatePrefix("revenue:");
     cacheComponent.invalidatePrefix("customers:");
@@ -251,8 +247,6 @@ export async function updateSingleStation(imei: string) {
       overdueCount,
     };
   } catch (err: any) {
-    console.error(`❌ Error for station ${imei}:`, err.message);
-
     try {
       const errMeta = stationCache[imei] || {};
       await db
@@ -325,7 +319,7 @@ export async function updateStationStats() {
   const lines = stationResults
     .map((r) => `  ${r.imei}: ${r.status} — ${r.detail}`)
     .join("\n");
-  console.log(
+  console.error(
     `📊 Station stats update complete (${successCount}/${ALL_STATIONS.length} OK):\n${lines}`,
   );
 
