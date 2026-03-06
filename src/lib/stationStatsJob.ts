@@ -187,8 +187,7 @@ export async function updateSingleStation(imei: string) {
       const diffMs = nowDate.getTime() - timestamp.toDate().getTime();
       const diffH = diffMs / 3600000;
       let isOverdue = false;
-      if (amount === 0.5 && diffH > 2) isOverdue = true;
-      else if (amount === 1 && diffH > 12) isOverdue = true;
+      if (diffH > 5) isOverdue = true;
 
       slotMap.set(assignedSlot, {
         slot_id: assignedSlot,
@@ -288,24 +287,53 @@ export async function updateSingleStation(imei: string) {
   }
 }
 
-// Bulk update all stations (kept for backward compatibility)
+// Bulk update all stations
 export async function updateStationStats() {
   let successCount = 0;
   let failureCount = 0;
+  const stationResults: { imei: string; status: string; detail: string }[] = [];
 
   for (const imei of ALL_STATIONS) {
     const result = await updateSingleStation(imei);
-    if (result.success) successCount++;
-    else failureCount++;
+    if (result.success) {
+      successCount++;
+      const r = result as any;
+      if (r.status === "offline") {
+        stationResults.push({
+          imei,
+          status: "⚠️ OFFLINE",
+          detail: "Station offline",
+        });
+      } else {
+        stationResults.push({
+          imei,
+          status: "✅ UPDATED",
+          detail: `slots=${r.totalSlots} avail=${r.availableCount} rented=${r.rentedCount} overdue=${r.overdueCount}`,
+        });
+      }
+    } else {
+      failureCount++;
+      stationResults.push({
+        imei,
+        status: "❌ FAILED",
+        detail: (result as any).error || "Unknown error",
+      });
+    }
   }
 
+  // Single consolidated log with all station results (visible in Vercel logs)
+  const lines = stationResults
+    .map((r) => `  ${r.imei}: ${r.status} — ${r.detail}`)
+    .join("\n");
   console.log(
-    `📊 Station stats update complete: ${successCount} succeeded, ${failureCount} failed out of ${ALL_STATIONS.length} total`,
+    `📊 Station stats update complete (${successCount}/${ALL_STATIONS.length} OK):\n${lines}`,
   );
+
   return {
     success: true,
     successCount,
     failureCount,
     total: ALL_STATIONS.length,
+    stations: stationResults,
   };
 }
