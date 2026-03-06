@@ -315,12 +315,12 @@ export async function updateStationStats() {
     }
   }
 
-  // Single consolidated log with all station results (visible in Vercel logs)
-  const lines = stationResults
-    .map((r) => `  ${r.imei}: ${r.status} — ${r.detail}`)
-    .join("\n");
+  // Log each station result separately so Vercel captures each line
+  for (const r of stationResults) {
+    console.error(`📊 ${r.imei}: ${r.status} — ${r.detail}`);
+  }
   console.error(
-    `📊 Station stats update complete (${successCount}/${ALL_STATIONS.length} OK):\n${lines}`,
+    `📊 Station stats update complete: ${successCount} OK, ${failureCount} FAILED out of ${ALL_STATIONS.length}`,
   );
 
   return {
