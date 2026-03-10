@@ -122,48 +122,63 @@ export async function updateSingleStation(imei: string) {
     let overdueCount = 0;
     const nowDate = now.toDate();
 
-    // 8. Close duplicate battery rentals — keep only latest
-    const validRentals: { doc: any; data: any }[] = [];
+    // 8. Deduplicate rentals by battery_id IN MEMORY — keep only the latest per battery
+    const latestByBattery = new Map<
+      string,
+      { doc: any; data: any; ts: number }
+    >();
 
     for (const rentalDoc of rentalsSnap.docs) {
       const r = rentalDoc.data();
       const { battery_id } = r;
+      if (!battery_id) continue;
 
-      const duplicateSnap = await db
-        .collection("rentals")
-        .where("battery_id", "==", battery_id)
-        .where("status", "==", "rented")
-        .orderBy("timestamp", "desc")
-        .get();
+      const ts = r.timestamp?.toMillis?.() || 0;
+      const existing = latestByBattery.get(battery_id);
 
-      if (duplicateSnap.docs.length > 1) {
-        const [latest, ...old] = duplicateSnap.docs;
-        for (const oldDoc of old) {
-          await oldDoc.ref.update({
+      if (!existing || ts > existing.ts) {
+        // This rental is newer — mark the old one for closure
+        if (existing) {
+          await existing.doc.ref.update({
             status: "returned",
             returnedAt: now,
             note: "Auto-closed: duplicate battery rental",
           });
-          console.log(`🛑 Closed duplicate rental for battery ${battery_id}`);
+          console.error(
+            `🛑 Closed duplicate rental for battery ${battery_id} (phone: ${existing.data.phoneNumber})`,
+          );
         }
-        if (rentalDoc.id !== latest.id) continue;
-      }
-
-      // Auto-return if battery is physically present
-      if (presentIds.has(battery_id)) {
+        latestByBattery.set(battery_id, { doc: rentalDoc, data: r, ts });
+      } else {
+        // This rental is older — close it immediately
         await rentalDoc.ref.update({
+          status: "returned",
+          returnedAt: now,
+          note: "Auto-closed: duplicate battery rental",
+        });
+        console.error(
+          `🛑 Closed duplicate rental for battery ${battery_id} (phone: ${r.phoneNumber})`,
+        );
+      }
+    }
+
+    // 9. Auto-return if battery is physically present, build valid rentals list
+    const validRentals: { doc: any; data: any }[] = [];
+
+    for (const [battery_id, entry] of Array.from(latestByBattery.entries())) {
+      if (presentIds.has(battery_id)) {
+        await entry.doc.ref.update({
           status: "returned",
           returnedAt: now,
           note: "Auto-returned: battery physically present",
         });
-        console.log(`↩️ Auto-returned ${battery_id}`);
+        console.error(`↩️ Auto-returned ${battery_id}`);
         continue;
       }
-
-      validRentals.push({ doc: rentalDoc, data: r });
+      validRentals.push({ doc: entry.doc, data: entry.data });
     }
 
-    // 9. Assign each valid rental to first available virtual slot
+    // 10. Assign each valid rental to first available virtual slot
     for (const { data: r } of validRentals) {
       const { battery_id, amount, timestamp, phoneNumber } = r;
 
@@ -204,14 +219,14 @@ export async function updateSingleStation(imei: string) {
       if (isOverdue) overdueCount++;
     }
 
-    // 10. Finalize slots and counts
+    // 11. Finalize slots and counts
     const slots = Array.from(slotMap.values()).sort(
       (a, b) => parseInt(a.slot_id) - parseInt(b.slot_id),
     );
     const totalSlots = slots.length;
     const availableCount = slots.filter((s) => s.status === "Online").length;
 
-    // 11. Write consolidated stats
+    // 12. Write consolidated stats
     await db
       .collection("station_stats")
       .doc(imei)
