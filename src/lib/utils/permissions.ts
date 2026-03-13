@@ -93,12 +93,17 @@ export function getAllowedRoutes(user: User | null): string[] {
     "/station-comparison",
     "/revenue",
     "/blacklist",
+    "/problem-slots",
   ];
 
   if (role === ROLES.MODERATOR) return moderatorRoutes;
 
   // Admin gets everything
   return [...moderatorRoutes, "/users"];
+}
+
+export function canManageProblemSlots(user: User | null): boolean {
+  return hasMinRole(user, ROLES.MODERATOR);
 }
 
 export function canAccessRoute(user: User | null, route: string): boolean {

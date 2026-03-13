@@ -14,6 +14,7 @@ import {
   faTimes,
   faChartBar,
   faBan,
+  faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useDarkModeStore } from "@/stores/useDarkModeStore";
@@ -67,6 +68,11 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
               icon: faChartBar,
             },
             { id: "slots", label: t("slots"), icon: faBatteryThreeQuarters },
+            {
+              id: "problem-slots",
+              label: "Problem Slots",
+              icon: faExclamationTriangle,
+            },
             { id: "revenue", label: t("revenue"), icon: faChartLine },
           ],
         },
@@ -95,6 +101,11 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
               icon: faChartBar,
             },
             { id: "slots", label: t("slots"), icon: faBatteryThreeQuarters },
+            {
+              id: "problem-slots",
+              label: "Problem Slots",
+              icon: faExclamationTriangle,
+            },
             { id: "revenue", label: t("revenue"), icon: faChartLine },
           ],
         },

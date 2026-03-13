@@ -50,6 +50,8 @@ export const API_ENDPOINTS = {
   // Blacklist
   BLACKLIST: "/api/blacklist",
   BLACKLIST_CHECK: "/api/blacklist/check",
+  // Problem Slots
+  PROBLEM_SLOTS: "/api/problem-slots",
 };
 
 export const apiClient = axios.create({
@@ -260,7 +262,10 @@ export const apiService = {
 
   // Customers
   getDailyCustomers: (imei: string) =>
-    cachedGet(`${API_ENDPOINTS.DAILY_CUSTOMERS_BY_IMEI}/${imei}`, GET_TTL.MEDIUM),
+    cachedGet(
+      `${API_ENDPOINTS.DAILY_CUSTOMERS_BY_IMEI}/${imei}`,
+      GET_TTL.MEDIUM,
+    ),
   getMonthlyCustomers: (imei: string) =>
     cachedGet(
       `${API_ENDPOINTS.MONTHLY_CUSTOMERS_BY_IMEI}/${imei}`,
@@ -294,6 +299,19 @@ export const apiService = {
       API_ENDPOINTS.BLACKLIST,
       API_ENDPOINTS.BLACKLIST_CHECK,
     ]),
+
+  // Problem Slots
+  getProblemSlots: () => cachedGet(API_ENDPOINTS.PROBLEM_SLOTS, GET_TTL.MEDIUM),
+  resolveProblemSlot: (id: string, resolved: boolean) =>
+    runMutation(
+      apiClient.patch(API_ENDPOINTS.PROBLEM_SLOTS, { id, resolved }),
+      [API_ENDPOINTS.PROBLEM_SLOTS],
+    ),
+  deleteProblemSlot: (id: string) =>
+    runMutation(
+      apiClient.delete(API_ENDPOINTS.PROBLEM_SLOTS, { data: { id } }),
+      [API_ENDPOINTS.PROBLEM_SLOTS],
+    ),
 
   // Payment
   processPayment: (stationCode: string, data: Record<string, unknown>) =>
