@@ -111,6 +111,39 @@ export async function updateSingleStation(imei: string) {
       });
     });
 
+    // 6b. Auto-resolve problem slots if battery in that slot is now healthy
+    const healthySlotIds = new Set(
+      rawBatteries
+        .filter(
+          (b: any) =>
+            b.slot_id &&
+            b.lock_status === "1" &&
+            b.battery_abnormal === "0" &&
+            b.cable_abnormal === "0",
+        )
+        .map((b: any) => b.slot_id),
+    );
+
+    const problemSlotsSnap = await db
+      .collection("problem_slots")
+      .where("imei", "==", imei)
+      .where("resolved", "==", false)
+      .get();
+
+    for (const psDoc of problemSlotsSnap.docs) {
+      const slotId = psDoc.data().slot_id;
+      if (healthySlotIds.has(slotId)) {
+        await psDoc.ref.update({
+          resolved: true,
+          resolvedAt: now.toDate(),
+          resolvedBy: "cron-auto",
+        });
+        console.error(
+          `✅ Auto-resolved problem slot ${slotId} on station ${imei} — battery healthy`,
+        );
+      }
+    }
+
     // 7. Fetch ongoing rentals
     const rentalsSnap = await db
       .collection("rentals")
