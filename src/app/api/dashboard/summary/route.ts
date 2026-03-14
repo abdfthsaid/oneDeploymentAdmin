@@ -71,38 +71,15 @@ export async function GET(req: NextRequest) {
             .get(),
         ]);
 
-        let dailyRevenue = calculateUniqueRevenue(dailySnap.docs);
-        let dailyCounts = countFromSnapshot(dailySnap);
-        let usedDate = dateStr;
-
-        // Keep previous behavior: if today has no data, fallback to yesterday.
-        if (dailyRevenue.count === 0 && dailyCounts.customers === 0) {
-          const yesterdayStart = new Date(
-            startUtc.getTime() - 24 * 60 * 60 * 1000,
-          );
-          const yesterdaySnap = await db
-            .collection("rentals")
-            .where("timestamp", ">=", Timestamp.fromDate(yesterdayStart))
-            .where("timestamp", "<", Timestamp.fromDate(startUtc))
-            .where("status", "in", ["rented", "returned"])
-            .get();
-
-          const yRevenue = calculateUniqueRevenue(yesterdaySnap.docs);
-          const yCounts = countFromSnapshot(yesterdaySnap);
-          if (yRevenue.count > 0 || yCounts.customers > 0) {
-            dailyRevenue = yRevenue;
-            dailyCounts = yCounts;
-            const yd = new Date(yesterdayStart.getTime() + 3 * 60 * 60 * 1000);
-            usedDate = `${yd.getUTCFullYear()}-${String(yd.getUTCMonth() + 1).padStart(2, "0")}-${String(yd.getUTCDate()).padStart(2, "0")}`;
-          }
-        }
+        const dailyRevenue = calculateUniqueRevenue(dailySnap.docs);
+        const dailyCounts = countFromSnapshot(dailySnap);
 
         const monthlyRevenue = calculateUniqueRevenue(monthlySnap.docs);
         const monthlyCounts = countFromSnapshot(monthlySnap);
 
         return {
           daily: {
-            date: usedDate,
+            date: dateStr,
             totalRevenueToday: dailyRevenue.total,
             totalRentalsToday: dailyRevenue.count,
             totalCustomersToday: dailyCounts.customers,

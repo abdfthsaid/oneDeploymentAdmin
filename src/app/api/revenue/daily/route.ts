@@ -32,33 +32,12 @@ export async function GET(req: NextRequest) {
           .where("status", "in", ["rented", "returned"])
           .get();
 
-        let { total, count } = calculateUniqueRevenue(snapshot.docs);
-        let usedDate = dateStr;
-
-        // If no rentals today, show yesterday's data as fallback
-        if (count === 0) {
-          const yesterdayStart = new Date(
-            startUtc.getTime() - 24 * 60 * 60 * 1000,
-          );
-          const yesterdaySnap = await db
-            .collection("rentals")
-            .where("timestamp", ">=", Timestamp.fromDate(yesterdayStart))
-            .where("timestamp", "<", Timestamp.fromDate(startUtc))
-            .where("status", "in", ["rented", "returned"])
-            .get();
-          const yResult = calculateUniqueRevenue(yesterdaySnap.docs);
-          if (yResult.count > 0) {
-            total = yResult.total;
-            count = yResult.count;
-            const yd = new Date(yesterdayStart.getTime() + 3 * 60 * 60 * 1000);
-            usedDate = `${yd.getUTCFullYear()}-${String(yd.getUTCMonth() + 1).padStart(2, "0")}-${String(yd.getUTCDate()).padStart(2, "0")}`;
-          }
-        }
+        const { total, count } = calculateUniqueRevenue(snapshot.docs);
 
         return {
           totalRevenueToday: total,
           totalRentalsToday: count,
-          date: usedDate,
+          date: dateStr,
         };
       },
     );

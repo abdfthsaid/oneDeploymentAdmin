@@ -51,30 +51,10 @@ export async function GET(req: NextRequest) {
           .where("status", "in", ["rented", "returned"])
           .get();
 
-        let result = countFromSnapshot(snapshot);
-        let usedDate = dateStr;
-
-        // If no customers today, show yesterday's data as fallback
-        if (result.customers === 0) {
-          const yesterdayStart = new Date(
-            startUtc.getTime() - 24 * 60 * 60 * 1000,
-          );
-          const yesterdaySnap = await db
-            .collection("rentals")
-            .where("timestamp", ">=", Timestamp.fromDate(yesterdayStart))
-            .where("timestamp", "<", Timestamp.fromDate(startUtc))
-            .where("status", "in", ["rented", "returned"])
-            .get();
-          const yResult = countFromSnapshot(yesterdaySnap);
-          if (yResult.customers > 0) {
-            result = yResult;
-            const yd = new Date(yesterdayStart.getTime() + 3 * 60 * 60 * 1000);
-            usedDate = `${yd.getUTCFullYear()}-${String(yd.getUTCMonth() + 1).padStart(2, "0")}-${String(yd.getUTCDate()).padStart(2, "0")}`;
-          }
-        }
+        const result = countFromSnapshot(snapshot);
 
         return {
-          date: usedDate,
+          date: dateStr,
           totalCustomersToday: result.customers,
           totalRentalsToday: result.rentals,
           stations: result.stations,

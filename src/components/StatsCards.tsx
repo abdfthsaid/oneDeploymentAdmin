@@ -10,9 +10,31 @@ import {
   faCalendar,
   faSyncAlt,
 } from "@fortawesome/free-solid-svg-icons";
-import { apiService } from "@/lib/api";
+import { API_ENDPOINTS, apiService } from "@/lib/api";
 
 const AUTO_REFRESH_MS = 10 * 60 * 1000; // 10 minutes
+const SOMALIA_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+function getCurrentSomaliaDateKey(now = new Date()) {
+  const somaliaNow = new Date(now.getTime() + SOMALIA_OFFSET_MS);
+  return `${somaliaNow.getUTCFullYear()}-${String(somaliaNow.getUTCMonth() + 1).padStart(2, "0")}-${String(somaliaNow.getUTCDate()).padStart(2, "0")}`;
+}
+
+function getMsUntilNextSomaliaMidnight(now = new Date()) {
+  const somaliaNow = new Date(now.getTime() + SOMALIA_OFFSET_MS);
+  const nextMidnightUtcMs =
+    Date.UTC(
+      somaliaNow.getUTCFullYear(),
+      somaliaNow.getUTCMonth(),
+      somaliaNow.getUTCDate() + 1,
+      0,
+      0,
+      1,
+      0,
+    ) - SOMALIA_OFFSET_MS;
+
+  return Math.max(1_000, nextMidnightUtcMs - now.getTime());
+}
 
 export default function StatsCards() {
   const [monthlyData, setMonthlyData] = useState({
@@ -78,11 +100,54 @@ export default function StatsCards() {
     }
   }, []);
 
+  const refreshDashboardSummary = useCallback(
+    async (forceFresh = false) => {
+      if (forceFresh) {
+        apiService.invalidateReadCache([API_ENDPOINTS.DASHBOARD_SUMMARY]);
+      }
+      await fetchData();
+    },
+    [fetchData],
+  );
+
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, AUTO_REFRESH_MS);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+    void refreshDashboardSummary(true);
+    const interval = window.setInterval(() => {
+      void fetchData();
+    }, AUTO_REFRESH_MS);
+
+    let midnightTimeoutId: number | null = null;
+    const scheduleMidnightRefresh = () => {
+      midnightTimeoutId = window.setTimeout(() => {
+        void refreshDashboardSummary(true);
+        scheduleMidnightRefresh();
+      }, getMsUntilNextSomaliaMidnight());
+    };
+    scheduleMidnightRefresh();
+
+    const syncOnFocus = () => {
+      const forceFresh = dailyData.date !== getCurrentSomaliaDateKey();
+      void refreshDashboardSummary(forceFresh);
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        syncOnFocus();
+      }
+    };
+
+    window.addEventListener("focus", syncOnFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(interval);
+      if (midnightTimeoutId !== null) {
+        window.clearTimeout(midnightTimeoutId);
+      }
+      window.removeEventListener("focus", syncOnFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [dailyData.date, fetchData, refreshDashboardSummary]);
 
   const stats = [
     {
@@ -151,7 +216,7 @@ export default function StatsCards() {
           {refreshing && " — Refreshing..."}
         </p>
         <button
-          onClick={fetchData}
+          onClick={() => void refreshDashboardSummary(true)}
           disabled={refreshing}
           className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-800"
         >
