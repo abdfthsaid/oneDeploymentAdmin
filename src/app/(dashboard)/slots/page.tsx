@@ -26,6 +26,39 @@ const timeAgo = (seconds: number) => {
   return `${h}h ${m}m ${s}s ago`;
 };
 
+const toDate = (value: any): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value?.toDate === "function") return value.toDate();
+  if (typeof value?._seconds === "number") {
+    return new Date(value._seconds * 1000);
+  }
+  if (typeof value?.seconds === "number") {
+    return new Date(value.seconds * 1000);
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+};
+
+const formatLastUpdated = (value: any) => {
+  const date = toDate(value);
+  if (!date) return null;
+
+  return {
+    absolute: date.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }),
+    relative: timeAgo(Math.floor(date.getTime() / 1000)),
+  };
+};
+
 const getBatteryColor = (level: number) =>
   level >= 70 ? "bg-green-400" : level >= 40 ? "bg-yellow-400" : "bg-red-500";
 
@@ -312,6 +345,8 @@ export default function SlotsPage() {
     },
   ];
 
+  const lastUpdated = formatLastUpdated(stationInfo?.timestamp);
+
   return (
     <div className="max-w-3xl p-4 mx-auto">
       <h3 className="mb-1 text-2xl font-bold dark:text-white">
@@ -329,6 +364,11 @@ export default function SlotsPage() {
           >
             {stationInfo.station_status}
           </span>
+          {lastUpdated && (
+            <span className="block mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Last updated: {lastUpdated.absolute} ({lastUpdated.relative})
+            </span>
+          )}
         </p>
       )}
 
