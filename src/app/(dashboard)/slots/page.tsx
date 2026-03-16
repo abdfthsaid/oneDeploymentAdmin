@@ -33,7 +33,7 @@ const getStatusInfo = (slot: any) => {
   const status = slot.status?.toLowerCase();
   const isMissing = status === "empty";
   const isOverdue = status === "overdue";
-  const isOccupied = status === "rented" || slot.rented;
+  const isOccupied = !isOverdue && (status === "rented" || slot.rented);
   const isAvailable = status === "online" && !slot.rented;
 
   let statusText = "Unknown";
@@ -45,30 +45,38 @@ const getStatusInfo = (slot: any) => {
   const badgeClass = `px-2 py-1 text-xs font-semibold rounded-full border ${
     isAvailable
       ? "text-green-700 bg-green-100 border-green-400"
-      : isOccupied
+      : isOverdue
+        ? "text-red-700 bg-red-100 border-red-400"
+        : isOccupied
         ? "text-blue-700 bg-blue-100 border-blue-400"
-        : "text-red-700 bg-red-100 border-red-400"
+      : "text-red-700 bg-red-100 border-red-400"
   }`;
 
   const buttonClass = `w-full py-2 font-semibold rounded-lg flex justify-center items-center gap-2 transition ${
     isAvailable
       ? "bg-green-600 text-white hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
-      : isOccupied
+      : isOverdue
+        ? "bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+        : isOccupied
         ? "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
-        : "bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+      : "bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
   }`;
 
   const borderClass = isAvailable
     ? "border-green-400"
-    : isOccupied
+    : isOverdue
+      ? "border-red-400"
+      : isOccupied
       ? "border-blue-400"
-      : "border-red-400";
+    : "border-red-400";
 
   const icon = isAvailable
     ? faLock
-    : isOccupied
+    : isOverdue
+      ? faExclamationTriangle
+      : isOccupied
       ? faLockOpen
-      : faExclamationTriangle;
+    : faExclamationTriangle;
 
   return { statusText, badgeClass, buttonClass, borderClass, icon };
 };

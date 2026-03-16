@@ -241,7 +241,7 @@ export async function updateSingleStation(imei: string) {
         slot_id: assignedSlot,
         battery_id,
         level: null,
-        status: "Rented",
+        status: isOverdue ? "Overdue" : "Rented",
         rented: true,
         phoneNumber: phoneNumber || "",
         rentedAt: timestamp,
