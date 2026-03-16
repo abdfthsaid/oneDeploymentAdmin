@@ -205,7 +205,7 @@ export default function SlotsPage() {
 
   const requestIdRef = useRef(0);
 
-  const loadSlots = useCallback(async () => {
+  const loadSlots = useCallback(async (forceFresh = false) => {
     if (!selected) return;
 
     // Immediately clear old data so stale info never shows
@@ -219,7 +219,7 @@ export default function SlotsPage() {
     const currentRequestId = ++requestIdRef.current;
 
     try {
-      const response = await apiService.getStationStats(selected);
+      const response = await apiService.getStationStats(selected, forceFresh);
 
       // If user switched station while we were fetching, discard this response
       if (currentRequestId !== requestIdRef.current) return;
@@ -266,7 +266,7 @@ export default function SlotsPage() {
     loadStations();
   }, []);
   useEffect(() => {
-    if (selected) loadSlots();
+    if (selected) void loadSlots();
   }, [selected, loadSlots]);
 
   const filtered = slots.filter(
@@ -366,7 +366,7 @@ export default function SlotsPage() {
         </div>
 
         <button
-          onClick={loadSlots}
+          onClick={() => void loadSlots(true)}
           className="flex items-center justify-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg shadow hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
         >
           <FontAwesomeIcon icon={faSyncAlt} /> Refresh Now

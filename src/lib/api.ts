@@ -239,8 +239,22 @@ export const apiService = {
       "/api/stations",
       API_ENDPOINTS.LATEST_TRANSACTIONS,
     ]),
-  getStationStats: (imei: string) =>
-    cachedGet(`${API_ENDPOINTS.STATIONS_STATS}/${imei}`, GET_TTL.SHORT),
+  getStationStats: async (imei: string, fresh = false) => {
+    const endpoint = `${API_ENDPOINTS.STATIONS_STATS}/${imei}`;
+
+    if (!fresh) {
+      return cachedGet(endpoint, GET_TTL.SHORT);
+    }
+
+    const response = await apiClient.get(`${endpoint}?fresh=1`, {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    });
+
+    invalidateApiGetCachePrefixes([API_ENDPOINTS.STATIONS_STATS]);
+    return response;
+  },
 
   // Transactions
   getLatestTransactions: () =>

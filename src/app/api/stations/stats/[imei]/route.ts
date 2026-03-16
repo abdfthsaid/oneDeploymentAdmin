@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/firebase-admin';
 import { authenticateRequest } from '@/lib/auth';
 import { cacheComponent, buildPrivateCacheControl } from '@/lib/cacheComponent';
+import { updateSingleStation } from '@/lib/stationStatsJob';
 
 const CACHE_TTL_MS = 30_000;
 
@@ -11,24 +12,42 @@ export async function GET(req: NextRequest, { params }: { params: { imei: string
 
   try {
     const { imei } = params;
-    const result = await cacheComponent.remember(
-      `stations:stats:imei:${imei}`,
-      CACHE_TTL_MS,
-      async () => {
-        const doc = await db.collection('station_stats').doc(imei).get();
+    const fresh = req.nextUrl.searchParams.get('fresh') === '1';
+    const cacheKey = `stations:stats:imei:${imei}`;
 
-        if (!doc.exists) {
-          return {
-            status: 404,
-            body: { error: `No stats found for station ${imei}` },
-          };
-        }
+    const loadStation = async () => {
+      const doc = await db.collection('station_stats').doc(imei).get();
 
+      if (!doc.exists) {
         return {
-          status: 200,
-          body: { station: doc.data() },
+          status: 404,
+          body: { error: `No stats found for station ${imei}` },
         };
-      },
+      }
+
+      return {
+        status: 200,
+        body: { station: doc.data() },
+      };
+    };
+
+    if (fresh) {
+      cacheComponent.invalidatePrefix('stations:stats:');
+      await updateSingleStation(imei);
+      const result = await loadStation();
+
+      return NextResponse.json(result.body, {
+        status: result.status,
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+        },
+      });
+    }
+
+    const result = await cacheComponent.remember(
+      cacheKey,
+      CACHE_TTL_MS,
+      loadStation,
     );
 
     return NextResponse.json(result.body, {
