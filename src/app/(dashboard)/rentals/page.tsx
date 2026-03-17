@@ -2,11 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faFilter,
-  faSearch,
-  faSync,
-} from "@fortawesome/free-solid-svg-icons";
+import { faSync } from "@fortawesome/free-solid-svg-icons";
 
 import { apiService } from "@/lib/api";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -54,7 +50,9 @@ export default function TransactionsPage() {
   const [stations, setStations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [phoneQuery, setPhoneQuery] = useState("");
+  const [batteryQuery, setBatteryQuery] = useState("");
+  const [waafiQuery, setWaafiQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [stationFilter, setStationFilter] = useState("all");
 
@@ -96,7 +94,9 @@ export default function TransactionsPage() {
   }, [stations]);
 
   const filteredTransactions = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const phoneSearch = phoneQuery.replace(/\D/g, "");
+    const batterySearch = batteryQuery.trim().toLowerCase();
+    const waafiSearch = waafiQuery.trim().toLowerCase();
 
     return transactions.filter((tx: any) => {
       const normalizedStatus = tx.status?.toLowerCase() || "";
@@ -112,31 +112,33 @@ export default function TransactionsPage() {
         return false;
       }
 
-      if (!query) {
-        return true;
-      }
-
-      const haystack = [
-        tx.id,
-        tx.phoneNumber,
-        tx.battery_id,
-        tx.slot_id,
-        tx.stationCode,
-        tx.imei,
-        tx.stationName,
-        stationNameByKey[tx.imei] || "",
+      const txPhone = String(tx.phoneNumber || "").replace(/\D/g, "");
+      const txBattery = String(tx.battery_id || "").toLowerCase();
+      const txWaafiValues = [
         tx.transactionId,
         tx.issuerTransactionId,
         tx.referenceId,
-        tx.status,
+        tx.id,
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
 
-      return haystack.includes(query);
+      if (phoneSearch && !txPhone.includes(phoneSearch)) {
+        return false;
+      }
+
+      if (batterySearch && !txBattery.includes(batterySearch)) {
+        return false;
+      }
+
+      if (waafiSearch && !txWaafiValues.includes(waafiSearch)) {
+        return false;
+      }
+
+      return true;
     });
-  }, [transactions, searchQuery, statusFilter, stationFilter, stationNameByKey]);
+  }, [transactions, phoneQuery, batteryQuery, waafiQuery, statusFilter, stationFilter]);
 
   const stationOptions = useMemo(() => {
     const options = transactions
@@ -163,6 +165,21 @@ export default function TransactionsPage() {
     }));
   }, [transactions, stationNameByKey]);
 
+  const hasActiveFilters =
+    phoneQuery.trim().length > 0 ||
+    batteryQuery.trim().length > 0 ||
+    waafiQuery.trim().length > 0 ||
+    statusFilter !== "all" ||
+    stationFilter !== "all";
+
+  const clearFilters = () => {
+    setPhoneQuery("");
+    setBatteryQuery("");
+    setWaafiQuery("");
+    setStatusFilter("all");
+    setStationFilter("all");
+  };
+
   return (
     <div className="p-4">
       <div className="flex flex-col gap-4 mb-6 md:flex-row md:items-center md:justify-between">
@@ -171,8 +188,8 @@ export default function TransactionsPage() {
             {t("transactions")}
           </h2>
           <p className="text-gray-500 dark:text-gray-400">
-            Full transaction history with phone, station, and Waafi reference
-            search
+            Full transaction history with separate filters for phone, battery,
+            station, and Waafi IDs
           </p>
         </div>
 
@@ -192,44 +209,48 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <div className="grid gap-3 mb-4 md:grid-cols-[2fr,1fr,1fr]">
-        <div className="relative">
-          <FontAwesomeIcon
-            icon={faSearch}
-            className="absolute left-3 top-3 text-gray-400"
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search phone, station, battery, ref, or transaction ID"
-            className="w-full pl-10 pr-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+      <div className="grid gap-3 mb-3 md:grid-cols-2 xl:grid-cols-5">
+        <input
+          type="text"
+          value={phoneQuery}
+          onChange={(e) => setPhoneQuery(e.target.value)}
+          placeholder="Phone number"
+          className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
+        />
 
-        <div className="relative">
-          <FontAwesomeIcon
-            icon={faFilter}
-            className="absolute left-3 top-3 text-gray-400"
-          />
-          <select
-            value={stationFilter}
-            onChange={(e) => setStationFilter(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All Stations</option>
-            {stationOptions.map((station) => (
-              <option key={station.value} value={station.value}>
-                {station.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <input
+          type="text"
+          value={batteryQuery}
+          onChange={(e) => setBatteryQuery(e.target.value)}
+          placeholder="Battery ID"
+          className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
+        />
+
+        <input
+          type="text"
+          value={waafiQuery}
+          onChange={(e) => setWaafiQuery(e.target.value)}
+          placeholder="Waafi TX / Issuer / Ref"
+          className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
+        />
+
+        <select
+          value={stationFilter}
+          onChange={(e) => setStationFilter(e.target.value)}
+          className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All Stations</option>
+          {stationOptions.map((station) => (
+            <option key={station.value} value={station.value}>
+              {station.label}
+            </option>
+          ))}
+        </select>
 
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
+          className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
         >
           <option value="all">All Status</option>
           <option value="rented">Rented</option>
@@ -239,9 +260,18 @@ export default function TransactionsPage() {
         </select>
       </div>
 
-      <div className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-        Showing {filteredTransactions.length} of {transactions.length}{" "}
-        transactions
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          Showing {filteredTransactions.length} of {transactions.length}{" "}
+          transactions
+        </div>
+        <button
+          onClick={clearFilters}
+          disabled={!hasActiveFilters}
+          className="px-3 py-1.5 text-sm border rounded-lg text-gray-600 dark:text-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+        >
+          Clear Filters
+        </button>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
