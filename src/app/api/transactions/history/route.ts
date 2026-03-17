@@ -9,6 +9,20 @@ import {
 
 const CACHE_TTL_MS = 20_000;
 
+function normalizeStatusFilter(value: string | null) {
+  return (value || "all").trim().toLowerCase();
+}
+
+function hasSearchFilters(req: NextRequest) {
+  return [
+    req.nextUrl.searchParams.get("phone"),
+    req.nextUrl.searchParams.get("battery"),
+    req.nextUrl.searchParams.get("waafi"),
+    req.nextUrl.searchParams.get("station"),
+    req.nextUrl.searchParams.get("status"),
+  ].some((value) => value && value.trim().length > 0 && value !== "all");
+}
+
 export async function GET(req: NextRequest) {
   const auth = authenticateRequest(req);
   if (auth instanceof NextResponse) return auth;
@@ -22,15 +36,28 @@ export async function GET(req: NextRequest) {
 
   try {
     const fresh = req.nextUrl.searchParams.get("fresh") === "1";
+    const phoneQuery = (req.nextUrl.searchParams.get("phone") || "")
+      .replace(/\D/g, "")
+      .trim();
+    const batteryQuery = (req.nextUrl.searchParams.get("battery") || "")
+      .trim()
+      .toLowerCase();
+    const waafiQuery = (req.nextUrl.searchParams.get("waafi") || "")
+      .trim()
+      .toLowerCase();
+    const stationQuery = (req.nextUrl.searchParams.get("station") || "")
+      .trim()
+      .toLowerCase();
+    const statusFilter = normalizeStatusFilter(
+      req.nextUrl.searchParams.get("status"),
+    );
+    const filteredSearch = hasSearchFilters(req);
 
-    if (fresh) {
+    if (fresh || filteredSearch) {
       cacheComponent.invalidate("transactions:history");
     }
 
-    const payload = await cacheComponent.remember(
-      "transactions:history",
-      CACHE_TTL_MS,
-      async () => {
+    const loadTransactions = async () => {
         const rentalsSnapshot = await db
           .collection("rentals")
           .orderBy("timestamp", "desc")
@@ -58,7 +85,7 @@ export async function GET(req: NextRequest) {
           }
         });
 
-        return rentals.map((r: any) => ({
+        const enrichedRentals = rentals.map((r: any) => ({
           ...r,
           stationName:
             stationMap[r.imei] ||
@@ -67,12 +94,80 @@ export async function GET(req: NextRequest) {
             r.imei ||
             null,
         }));
-      },
-    );
+
+        if (!filteredSearch) {
+          return enrichedRentals;
+        }
+
+        return enrichedRentals.filter((r: any) => {
+          const normalizedStatus = String(r.status || "").toLowerCase();
+          const normalizedPhone = String(r.phoneNumber || "").replace(/\D/g, "");
+          const normalizedBattery = String(r.battery_id || "").toLowerCase();
+          const normalizedStationText = [
+            r.imei,
+            r.stationCode,
+            r.stationName,
+            stationMap[r.imei],
+            stationMap[r.stationCode],
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          const normalizedWaafi = [
+            r.transactionId,
+            r.issuerTransactionId,
+            r.referenceId,
+            r.id,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+
+          const matchesStatus =
+            statusFilter === "all"
+              ? true
+              : statusFilter === "returned"
+                ? normalizedStatus === "returned" ||
+                  normalizedStatus === "completed"
+                : normalizedStatus !== "returned" &&
+                  normalizedStatus !== "completed";
+
+          if (!matchesStatus) {
+            return false;
+          }
+
+          if (phoneQuery && !normalizedPhone.includes(phoneQuery)) {
+            return false;
+          }
+
+          if (batteryQuery && !normalizedBattery.includes(batteryQuery)) {
+            return false;
+          }
+
+          if (waafiQuery && !normalizedWaafi.includes(waafiQuery)) {
+            return false;
+          }
+
+          if (stationQuery && !normalizedStationText.includes(stationQuery)) {
+            return false;
+          }
+
+          return true;
+        });
+      };
+
+    const payload =
+      fresh || filteredSearch
+        ? await loadTransactions()
+        : await cacheComponent.remember(
+            "transactions:history",
+            CACHE_TTL_MS,
+            loadTransactions,
+          );
 
     return NextResponse.json(payload, {
       headers: {
-        "Cache-Control": fresh
+        "Cache-Control": fresh || filteredSearch
           ? "no-store, max-age=0"
           : buildPrivateCacheControl(CACHE_TTL_MS),
       },

@@ -260,19 +260,53 @@ export const apiService = {
   // Transactions
   getLatestTransactions: () =>
     cachedGet(API_ENDPOINTS.LATEST_TRANSACTIONS, GET_TTL.SHORT),
-  getTransactionHistory: async (fresh = false) => {
-    if (!fresh) {
-      return cachedGet(API_ENDPOINTS.TRANSACTION_HISTORY, GET_TTL.SHORT);
+  getTransactionHistory: async ({
+    fresh = false,
+    phone = "",
+    battery = "",
+    waafi = "",
+    station = "",
+    status = "all",
+  }: {
+    fresh?: boolean;
+    phone?: string;
+    battery?: string;
+    waafi?: string;
+    station?: string;
+    status?: string;
+  } = {}) => {
+    const searchParams = new URLSearchParams();
+    if (fresh) searchParams.set("fresh", "1");
+    if (phone.trim()) searchParams.set("phone", phone.trim());
+    if (battery.trim()) searchParams.set("battery", battery.trim());
+    if (waafi.trim()) searchParams.set("waafi", waafi.trim());
+    if (station.trim() && station !== "all") {
+      searchParams.set("station", station.trim());
+    }
+    if (status.trim() && status !== "all") {
+      searchParams.set("status", status.trim());
     }
 
-    const response = await apiClient.get(
-      `${API_ENDPOINTS.TRANSACTION_HISTORY}?fresh=1`,
-      {
-        headers: {
-          "Cache-Control": "no-store",
-        },
+    const endpoint = searchParams.size
+      ? `${API_ENDPOINTS.TRANSACTION_HISTORY}?${searchParams.toString()}`
+      : API_ENDPOINTS.TRANSACTION_HISTORY;
+
+    const hasFilters =
+      phone.trim() ||
+      battery.trim() ||
+      waafi.trim() ||
+      (station.trim() && station !== "all") ||
+      (status.trim() && status !== "all");
+
+    if (!fresh && !hasFilters) {
+      return cachedGet(endpoint, GET_TTL.SHORT);
+    }
+
+    const response = await apiClient.get(endpoint, {
+      headers: {
+        "Cache-Control": "no-store",
       },
-    );
+    });
 
     invalidateApiGetCachePrefixes([API_ENDPOINTS.TRANSACTION_HISTORY]);
     return response;

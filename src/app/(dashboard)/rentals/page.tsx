@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChevronDown,
@@ -60,29 +60,72 @@ export default function TransactionsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [stationFilter, setStationFilter] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
-  const fetchData = async (fresh = false) => {
+  const hasActiveFilters =
+    phoneQuery.trim().length > 0 ||
+    batteryQuery.trim().length > 0 ||
+    waafiQuery.trim().length > 0 ||
+    statusFilter !== "all" ||
+    stationFilter !== "all";
+
+  const fetchTransactions = async (fresh = false) => {
+    const requestId = ++requestIdRef.current;
+
     try {
       setLoading(true);
       setError("");
 
-      const [txRes, stRes] = await Promise.all([
-        apiService.getTransactionHistory(fresh),
-        apiService.getStations(),
-      ]);
+      const txRes = await apiService.getTransactionHistory({
+        fresh: fresh || hasActiveFilters,
+        phone: phoneQuery,
+        battery: batteryQuery,
+        waafi: waafiQuery,
+        station: stationFilter,
+        status: statusFilter,
+      });
+
+      if (requestId !== requestIdRef.current) return;
 
       setTransactions(txRes.data || []);
-      setStations(stRes.data.stations || stRes.data || []);
+      setExpandedId(null);
     } catch (err: any) {
+      if (requestId !== requestIdRef.current) return;
       setError(err.message || "Failed to fetch transaction history");
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    void fetchData();
+    const loadStations = async () => {
+      try {
+        const stRes = await apiService.getStations();
+        setStations(stRes.data.stations || stRes.data || []);
+      } catch {
+        // Keep transaction screen usable even if station names fail to load.
+      }
+    };
+
+    void loadStations();
   }, []);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      void fetchTransactions();
+    }, hasActiveFilters ? 250 : 0);
+
+    return () => clearTimeout(timeout);
+  }, [
+    phoneQuery,
+    batteryQuery,
+    waafiQuery,
+    stationFilter,
+    statusFilter,
+    hasActiveFilters,
+  ]);
 
   const stationNameByKey = useMemo(() => {
     const map: Record<string, string> = {};
@@ -151,21 +194,15 @@ export default function TransactionsPage() {
   }, [transactions, phoneQuery, batteryQuery, waafiQuery, statusFilter, stationFilter]);
 
   const stationOptions = useMemo(() => {
-    const options = transactions
-      .map((tx: any) => ({
-        value: tx.imei || tx.stationCode || tx.stationName,
-        label:
-          stationNameByKey[tx.imei] ||
-          tx.stationName ||
-          tx.stationCode ||
-          tx.imei,
-      }))
-      .filter((option) => option.value && option.label);
-
     const deduped = new Map<string, string>();
-    options.forEach((option) => {
-      if (!deduped.has(option.value)) {
-        deduped.set(option.value, option.label);
+
+    stations.forEach((station: any) => {
+      const value = station?.imei || station?.stationCode || station?.id;
+      const label =
+        station?.name || station?.imei || station?.stationCode || station?.id;
+
+      if (value && label && !deduped.has(value)) {
+        deduped.set(value, label);
       }
     });
 
@@ -173,14 +210,7 @@ export default function TransactionsPage() {
       value,
       label,
     }));
-  }, [transactions, stationNameByKey]);
-
-  const hasActiveFilters =
-    phoneQuery.trim().length > 0 ||
-    batteryQuery.trim().length > 0 ||
-    waafiQuery.trim().length > 0 ||
-    statusFilter !== "all" ||
-    stationFilter !== "all";
+  }, [stations]);
 
   const clearFilters = () => {
     setPhoneQuery("");
@@ -204,13 +234,13 @@ export default function TransactionsPage() {
             {t("transactions")}
           </h2>
           <p className="text-gray-500 dark:text-gray-400">
-            Full transaction history with separate filters for phone, battery,
-            station, and Waafi IDs
+            Full transaction history with live Firestore search for phone,
+            battery, station, and Waafi IDs
           </p>
         </div>
 
         <button
-          onClick={() => void fetchData(true)}
+          onClick={() => void fetchTransactions(true)}
           disabled={loading}
           className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center space-x-2 disabled:opacity-50"
         >
@@ -293,8 +323,9 @@ export default function TransactionsPage() {
 
       <div className="flex items-center justify-between mb-4">
         <div className="text-sm text-gray-500 dark:text-gray-400">
-          Showing {filteredTransactions.length} of {transactions.length}{" "}
-          transactions
+          {hasActiveFilters
+            ? `Found ${filteredTransactions.length} matching transactions from Firestore`
+            : `Showing ${filteredTransactions.length} transactions`}
         </div>
         <button
           onClick={clearFilters}
