@@ -32,6 +32,7 @@ export const API_ENDPOINTS = {
   STATIONS_STATS: "/api/stations/stats",
   // Transactions
   LATEST_TRANSACTIONS: "/api/transactions/latest",
+  TRANSACTION_HISTORY: "/api/transactions/history",
   // Revenue
   DAILY_REVENUE: "/api/revenue/daily",
   MONTHLY_REVENUE: "/api/revenue/monthly",
@@ -259,6 +260,23 @@ export const apiService = {
   // Transactions
   getLatestTransactions: () =>
     cachedGet(API_ENDPOINTS.LATEST_TRANSACTIONS, GET_TTL.SHORT),
+  getTransactionHistory: async (fresh = false) => {
+    if (!fresh) {
+      return cachedGet(API_ENDPOINTS.TRANSACTION_HISTORY, GET_TTL.SHORT);
+    }
+
+    const response = await apiClient.get(
+      `${API_ENDPOINTS.TRANSACTION_HISTORY}?fresh=1`,
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+
+    invalidateApiGetCachePrefixes([API_ENDPOINTS.TRANSACTION_HISTORY]);
+    return response;
+  },
 
   // Revenue
   getDailyRevenue: (imei?: string) =>

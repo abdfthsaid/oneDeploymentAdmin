@@ -177,7 +177,7 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
         router.push("/users");
         break;
       case "transaction":
-        router.push("/dashboard");
+        router.push("/rentals");
         break;
     }
   };
@@ -188,7 +188,7 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
       "/stations": t("stations"),
       "/slots": t("slots"),
       "/revenue": t("revenue"),
-      "/rentals": "Active Rentals",
+      "/rentals": t("transactions"),
       "/users": t("users"),
       "/powerbanks": "Power Banks",
       "/notifications": t("notifications"),
