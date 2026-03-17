@@ -256,44 +256,68 @@ export default function TransactionsPage() {
       )}
 
       <div className="grid gap-3 mb-3 md:grid-cols-2 xl:grid-cols-5">
-        <input
-          type="text"
-          value={phoneQuery}
-          onChange={(e) => setPhoneQuery(e.target.value)}
-          placeholder="Phone number"
-          className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
-        />
+        <div>
+          <label className="block mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Phone
+          </label>
+          <input
+            type="text"
+            value={phoneQuery}
+            onChange={(e) => setPhoneQuery(e.target.value)}
+            placeholder="Phone number"
+            className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
 
-        <input
-          type="text"
-          value={batteryQuery}
-          onChange={(e) => setBatteryQuery(e.target.value)}
-          placeholder="Battery ID"
-          className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
-        />
+        <div>
+          <label className="block mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Battery
+          </label>
+          <input
+            type="text"
+            value={batteryQuery}
+            onChange={(e) => setBatteryQuery(e.target.value)}
+            placeholder="Battery ID"
+            className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
 
-        <input
-          type="text"
-          value={waafiQuery}
-          onChange={(e) => setWaafiQuery(e.target.value)}
-          placeholder="Waafi TX / Issuer / Ref"
-          className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
-        />
+        <div>
+          <label className="block mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Waafi
+          </label>
+          <input
+            type="text"
+            value={waafiQuery}
+            onChange={(e) => setWaafiQuery(e.target.value)}
+            placeholder="TX / Issuer / Ref"
+            className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
 
-        <select
-          value={stationFilter}
-          onChange={(e) => setStationFilter(e.target.value)}
-          className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Stations</option>
-          {stationOptions.map((station) => (
-            <option key={station.value} value={station.value}>
-              {station.label}
-            </option>
-          ))}
-        </select>
+        <div>
+          <label className="block mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Station
+          </label>
+          <select
+            value={stationFilter}
+            onChange={(e) => setStationFilter(e.target.value)}
+            className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Stations</option>
+            {stationOptions.map((station) => (
+              <option key={station.value} value={station.value}>
+                {station.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-        <div className="flex items-center gap-2 p-1 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-600">
+        <div>
+          <label className="block mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Status
+          </label>
+          <div className="flex items-center gap-2 p-1 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-600">
           {statusOptions.map((option) => {
             const active = statusFilter === option.value;
 
@@ -318,6 +342,7 @@ export default function TransactionsPage() {
               </label>
             );
           })}
+          </div>
         </div>
       </div>
 
