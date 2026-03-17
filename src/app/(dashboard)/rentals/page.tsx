@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSync } from "@fortawesome/free-solid-svg-icons";
+import {
+  faChevronDown,
+  faChevronUp,
+  faSync,
+} from "@fortawesome/free-solid-svg-icons";
 
 import { apiService } from "@/lib/api";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -55,6 +59,7 @@ export default function TransactionsPage() {
   const [waafiQuery, setWaafiQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [stationFilter, setStationFilter] = useState("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const fetchData = async (fresh = false) => {
     try {
@@ -104,7 +109,12 @@ export default function TransactionsPage() {
         tx.imei || tx.stationCode || tx.stationName || "";
 
       const matchesStatus =
-        statusFilter === "all" || normalizedStatus === statusFilter;
+        statusFilter === "all"
+          ? true
+          : statusFilter === "returned"
+            ? normalizedStatus === "returned" || normalizedStatus === "completed"
+            : normalizedStatus !== "returned" &&
+              normalizedStatus !== "completed";
       const matchesStation =
         stationFilter === "all" || normalizedStation === stationFilter;
 
@@ -180,6 +190,12 @@ export default function TransactionsPage() {
     setStationFilter("all");
   };
 
+  const statusOptions = [
+    { value: "all", label: "All" },
+    { value: "rented", label: "Rented" },
+    { value: "returned", label: "Returned" },
+  ];
+
   return (
     <div className="p-4">
       <div className="flex flex-col gap-4 mb-6 md:flex-row md:items-center md:justify-between">
@@ -247,17 +263,32 @@ export default function TransactionsPage() {
           ))}
         </select>
 
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Status</option>
-          <option value="rented">Rented</option>
-          <option value="returned">Returned</option>
-          <option value="completed">Completed</option>
-          <option value="overdue">Overdue</option>
-        </select>
+        <div className="flex items-center gap-2 p-1 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-600">
+          {statusOptions.map((option) => {
+            const active = statusFilter === option.value;
+
+            return (
+              <label
+                key={option.value}
+                className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-center text-sm font-medium transition ${
+                  active
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-700"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="transaction-status"
+                  value={option.value}
+                  checked={active}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="sr-only"
+                />
+                {option.label}
+              </label>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex items-center justify-between mb-4">
@@ -276,7 +307,7 @@ export default function TransactionsPage() {
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px]">
+          <table className="w-full min-w-[880px]">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
@@ -298,7 +329,7 @@ export default function TransactionsPage() {
                   Status
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                  Waafi IDs
+                  Details
                 </th>
               </tr>
             </thead>
@@ -319,55 +350,120 @@ export default function TransactionsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredTransactions.map((tx: any) => (
-                  <tr
-                    key={tx.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700 align-top"
-                  >
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                      {formatTimestamp(tx.timestamp)}
-                    </td>
-                    <td className="px-4 py-3 dark:text-white">
-                      {formatPhoneNumber(tx.phoneNumber)}
-                    </td>
-                    <td className="px-4 py-3 dark:text-white">
-                      {stationNameByKey[tx.imei] ||
-                        tx.stationName ||
-                        tx.stationCode ||
-                        tx.imei ||
-                        "-"}
-                    </td>
-                    <td className="px-4 py-3 dark:text-white">
-                      <div className="font-medium">{tx.battery_id || "-"}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        Slot {tx.slot_id || "-"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-medium dark:text-white">
-                      ${Number(tx.amount || 0).toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-0.5 text-xs rounded-full ${getStatusBadge(
-                          tx.status,
-                        )}`}
+                filteredTransactions.map((tx: any) => {
+                  const isExpanded = expandedId === tx.id;
+
+                  return (
+                    <Fragment key={tx.id}>
+                      <tr
+                        className="hover:bg-gray-50 dark:hover:bg-gray-700 align-top"
                       >
-                        {tx.status || "Unknown"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm dark:text-white">
-                      <div className="font-mono break-all">
-                        TX: {tx.transactionId || "-"}
-                      </div>
-                      <div className="font-mono break-all text-gray-500 dark:text-gray-400">
-                        Issuer: {tx.issuerTransactionId || "-"}
-                      </div>
-                      <div className="font-mono break-all text-gray-500 dark:text-gray-400">
-                        Ref: {tx.referenceId || "-"}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                        <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                          {formatTimestamp(tx.timestamp)}
+                        </td>
+                        <td className="px-4 py-3 dark:text-white">
+                          {formatPhoneNumber(tx.phoneNumber)}
+                        </td>
+                        <td className="px-4 py-3 dark:text-white">
+                          {stationNameByKey[tx.imei] ||
+                            tx.stationName ||
+                            tx.stationCode ||
+                            tx.imei ||
+                            "-"}
+                        </td>
+                        <td className="px-4 py-3 dark:text-white">
+                          <div className="font-medium">
+                            {tx.battery_id || "-"}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Slot {tx.slot_id || "-"}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-medium dark:text-white">
+                          ${Number(tx.amount || 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`px-2 py-0.5 text-xs rounded-full ${getStatusBadge(
+                              tx.status,
+                            )}`}
+                          >
+                            {tx.status || "Unknown"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() =>
+                              setExpandedId(isExpanded ? null : tx.id)
+                            }
+                            className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                          >
+                            {isExpanded ? "Hide" : "View"}
+                            <FontAwesomeIcon
+                              icon={isExpanded ? faChevronUp : faChevronDown}
+                            />
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${tx.id}-details`} className="bg-gray-50 dark:bg-gray-900/40">
+                          <td colSpan={7} className="px-4 py-4">
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Waafi Transaction ID
+                                </div>
+                                <div className="mt-1 break-all font-mono text-sm dark:text-white">
+                                  {tx.transactionId || "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Issuer Transaction ID
+                                </div>
+                                <div className="mt-1 break-all font-mono text-sm dark:text-white">
+                                  {tx.issuerTransactionId || "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Reference ID
+                                </div>
+                                <div className="mt-1 break-all font-mono text-sm dark:text-white">
+                                  {tx.referenceId || "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Firestore ID
+                                </div>
+                                <div className="mt-1 break-all font-mono text-sm dark:text-white">
+                                  {tx.id || "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Station IMEI
+                                </div>
+                                <div className="mt-1 break-all font-mono text-sm dark:text-white">
+                                  {tx.imei || "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Unlock Status
+                                </div>
+                                <div className="mt-1 text-sm dark:text-white">
+                                  {tx.unlockStatus || "-"}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
