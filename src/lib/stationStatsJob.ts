@@ -12,10 +12,22 @@ const ALL_STATIONS = [
   "WSEP161741066503",
 ];
 
+const FIRESTORE_IN_QUERY_LIMIT = 10;
+
 // Only active stations (the others return HTTP 402 — shut down)
 export const ACTIVE_STATIONS = ["WSEP161741066502", "WSEP161741066503"];
 
 const stationCache: Record<string, any> = {};
+
+function chunkValues<T>(values: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+
+  return chunks;
+}
 
 // Update a single station — used by round-robin cron
 export async function updateSingleStation(imei: string) {
@@ -144,7 +156,44 @@ export async function updateSingleStation(imei: string) {
       }
     }
 
-    // 7. Fetch ongoing rentals
+    // 7. Auto-return any active rental whose battery is physically present
+    // in this station, even if that rental started at another station.
+    const presentBatteryIds = Array.from(presentIds).filter(Boolean);
+
+    for (const batteryIdChunk of chunkValues(
+      presentBatteryIds,
+      FIRESTORE_IN_QUERY_LIMIT,
+    )) {
+      const rentalsByBatterySnap = await db
+        .collection("rentals")
+        .where("battery_id", "in", batteryIdChunk)
+        .get();
+
+      for (const rentalDoc of rentalsByBatterySnap.docs) {
+        const rental = rentalDoc.data();
+
+        if (rental.status !== "rented") {
+          continue;
+        }
+
+        await rentalDoc.ref.update({
+          status: "returned",
+          returnedAt: now,
+          note:
+            rental.imei === imei
+              ? "Auto-returned: battery physically present"
+              : `Auto-returned: battery physically present at station ${imei}`,
+        });
+
+        console.error(
+          rental.imei === imei
+            ? `↩️ Auto-returned ${rental.battery_id}`
+            : `↩️ Auto-returned ${rental.battery_id} from rental station ${rental.imei} because it is present at station ${imei}`,
+        );
+      }
+    }
+
+    // 8. Fetch ongoing rentals for this station after global auto-return pass
     const rentalsSnap = await db
       .collection("rentals")
       .where("imei", "==", imei)
@@ -155,7 +204,7 @@ export async function updateSingleStation(imei: string) {
     let overdueCount = 0;
     const nowDate = now.toDate();
 
-    // 8. Deduplicate rentals by battery_id IN MEMORY — keep only the latest per battery
+    // 9. Deduplicate rentals by battery_id IN MEMORY — keep only the latest per battery
     const latestByBattery = new Map<
       string,
       { doc: any; data: any; ts: number }
@@ -195,23 +244,14 @@ export async function updateSingleStation(imei: string) {
       }
     }
 
-    // 9. Auto-return if battery is physically present, build valid rentals list
+    // 10. Build valid rentals list for batteries still out in the field
     const validRentals: { doc: any; data: any }[] = [];
 
     for (const [battery_id, entry] of Array.from(latestByBattery.entries())) {
-      if (presentIds.has(battery_id)) {
-        await entry.doc.ref.update({
-          status: "returned",
-          returnedAt: now,
-          note: "Auto-returned: battery physically present",
-        });
-        console.error(`↩️ Auto-returned ${battery_id}`);
-        continue;
-      }
       validRentals.push({ doc: entry.doc, data: entry.data });
     }
 
-    // 10. Assign each valid rental to first available virtual slot
+    // 11. Assign each valid rental to first available virtual slot
     for (const { data: r } of validRentals) {
       const { battery_id, amount, timestamp, phoneNumber } = r;
 
@@ -252,14 +292,14 @@ export async function updateSingleStation(imei: string) {
       if (isOverdue) overdueCount++;
     }
 
-    // 11. Finalize slots and counts
+    // 12. Finalize slots and counts
     const slots = Array.from(slotMap.values()).sort(
       (a, b) => parseInt(a.slot_id) - parseInt(b.slot_id),
     );
     const totalSlots = slots.length;
     const availableCount = slots.filter((s) => s.status === "Online").length;
 
-    // 12. Write consolidated stats
+    // 13. Write consolidated stats
     await db
       .collection("station_stats")
       .doc(imei)
