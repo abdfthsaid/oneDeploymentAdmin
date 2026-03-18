@@ -5,6 +5,115 @@ import { cacheComponent, buildPrivateCacheControl } from '@/lib/cacheComponent';
 import { updateSingleStation } from '@/lib/stationStatsJob';
 
 const CACHE_TTL_MS = 30_000;
+const OVERDUE_HOURS = 5;
+
+function getTimestampMillis(value: any): number {
+  if (!value) return 0;
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (typeof value?._seconds === 'number') return value._seconds * 1000;
+  if (typeof value?.seconds === 'number') return value.seconds * 1000;
+  if (value instanceof Date) return value.getTime();
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+}
+
+function buildLiveStationView(station: any, rentals: any[]) {
+  const sourceSlots = Array.isArray(station?.batteries) ? station.batteries : [];
+  const slots = sourceSlots.map((slot: any) => {
+    const normalizedStatus = String(slot?.status || '').toLowerCase();
+    const isVirtualRentalSlot =
+      normalizedStatus === 'rented' || normalizedStatus === 'overdue';
+
+    if (!isVirtualRentalSlot) {
+      return {
+        ...slot,
+        rented: false,
+        phoneNumber: '',
+        rentedAt: null,
+        amount: 0,
+      };
+    }
+
+    return {
+      ...slot,
+      battery_id: null,
+      level: null,
+      status: 'Empty',
+      rented: false,
+      phoneNumber: '',
+      rentedAt: null,
+      amount: 0,
+    };
+  });
+
+  const latestByBattery = new Map<string, any>();
+  for (const rental of rentals) {
+    const batteryId = rental?.battery_id;
+    if (!batteryId) continue;
+
+    const currentTs = getTimestampMillis(rental.timestamp);
+    const existing = latestByBattery.get(batteryId);
+    if (!existing || currentTs > getTimestampMillis(existing.timestamp)) {
+      latestByBattery.set(batteryId, rental);
+    }
+  }
+
+  let rentedCount = 0;
+  let overdueCount = 0;
+  const now = Date.now();
+
+  for (const rental of Array.from(latestByBattery.values()).sort((a, b) => {
+    return getTimestampMillis(b.timestamp) - getTimestampMillis(a.timestamp);
+  })) {
+    const assignedSlotIndex = slots.findIndex((slot: any) => {
+      return (
+        String(slot?.status || '').toLowerCase() === 'empty' &&
+        !slot?.rented &&
+        !slot?.battery_id
+      );
+    });
+
+    if (assignedSlotIndex === -1) {
+      continue;
+    }
+
+    const rentedAtMs = getTimestampMillis(rental.timestamp);
+    const isOverdue =
+      rentedAtMs > 0 && now - rentedAtMs > OVERDUE_HOURS * 60 * 60 * 1000;
+
+    slots[assignedSlotIndex] = {
+      ...slots[assignedSlotIndex],
+      battery_id: rental.battery_id,
+      level: null,
+      status: isOverdue ? 'Overdue' : 'Rented',
+      rented: true,
+      phoneNumber: rental.phoneNumber || '',
+      rentedAt: rental.timestamp || null,
+      amount: rental.amount || 0,
+      rentalId: rental.id || null,
+      unlockStatus: rental.unlockStatus || null,
+    };
+
+    rentedCount++;
+    if (isOverdue) {
+      overdueCount++;
+    }
+  }
+
+  const availableCount = slots.filter((slot: any) => {
+    return String(slot?.status || '').toLowerCase() === 'online';
+  }).length;
+
+  return {
+    ...station,
+    batteries: slots,
+    totalSlots: slots.length,
+    availableCount,
+    rentedCount,
+    overdueCount,
+  };
+}
 
 export async function GET(req: NextRequest, { params }: { params: { imei: string } }) {
   const auth = authenticateRequest(req);
@@ -25,9 +134,23 @@ export async function GET(req: NextRequest, { params }: { params: { imei: string
         };
       }
 
+      const rentalsSnap = await db
+        .collection('rentals')
+        .where('imei', '==', imei)
+        .where('status', '==', 'rented')
+        .get();
+
+      const station = buildLiveStationView(
+        doc.data(),
+        rentalsSnap.docs.map((rentalDoc) => ({
+          id: rentalDoc.id,
+          ...rentalDoc.data(),
+        })),
+      );
+
       return {
         status: 200,
-        body: { station: doc.data() },
+        body: { station },
       };
     };
 
