@@ -242,18 +242,13 @@ export const apiService = {
     ]),
   getStationStats: async (imei: string, fresh = false) => {
     const endpoint = `${API_ENDPOINTS.STATIONS_STATS}/${imei}`;
+    const resolvedEndpoint = fresh ? `${endpoint}?fresh=1` : endpoint;
 
-    if (!fresh) {
-      return cachedGet(endpoint, GET_TTL.SHORT);
-    }
-
-    const response = await apiClient.get(`${endpoint}?fresh=1`, {
+    const response = await apiClient.get(resolvedEndpoint, {
       headers: {
         "Cache-Control": "no-store",
       },
     });
-
-    invalidateApiGetCachePrefixes([API_ENDPOINTS.STATIONS_STATS]);
     return response;
   },
 

@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/firebase-admin';
 import { authenticateRequest } from '@/lib/auth';
-import { cacheComponent, buildPrivateCacheControl } from '@/lib/cacheComponent';
 import { updateSingleStation } from '@/lib/stationStatsJob';
 
-const CACHE_TTL_MS = 30_000;
 const OVERDUE_HOURS = 5;
 
 function getTimestampMillis(value: any): number {
@@ -122,7 +120,6 @@ export async function GET(req: NextRequest, { params }: { params: { imei: string
   try {
     const { imei } = params;
     const fresh = req.nextUrl.searchParams.get('fresh') === '1';
-    const cacheKey = `stations:stats:imei:${imei}`;
 
     const loadStation = async () => {
       const doc = await db.collection('station_stats').doc(imei).get();
@@ -155,28 +152,15 @@ export async function GET(req: NextRequest, { params }: { params: { imei: string
     };
 
     if (fresh) {
-      cacheComponent.invalidatePrefix('stations:stats:');
       await updateSingleStation(imei);
-      const result = await loadStation();
-
-      return NextResponse.json(result.body, {
-        status: result.status,
-        headers: {
-          'Cache-Control': 'no-store, max-age=0',
-        },
-      });
     }
 
-    const result = await cacheComponent.remember(
-      cacheKey,
-      CACHE_TTL_MS,
-      loadStation,
-    );
+    const result = await loadStation();
 
     return NextResponse.json(result.body, {
       status: result.status,
       headers: {
-        'Cache-Control': buildPrivateCacheControl(CACHE_TTL_MS),
+        'Cache-Control': 'no-store, max-age=0',
       },
     });
   } catch (err: any) {

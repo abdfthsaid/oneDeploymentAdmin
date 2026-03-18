@@ -307,7 +307,7 @@ export default function SlotsPage() {
     loadStations();
   }, []);
   useEffect(() => {
-    if (selected) void loadSlots();
+    if (selected) void loadSlots(true);
   }, [selected, loadSlots]);
 
   const filtered = slots.filter(
