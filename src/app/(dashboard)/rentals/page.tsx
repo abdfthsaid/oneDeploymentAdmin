@@ -47,6 +47,35 @@ function formatPhoneNumber(phone: string) {
   return phone;
 }
 
+function parseSomaliaDateBoundary(dateValue: string, endOfDay = false) {
+  const trimmed = dateValue.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return null;
+  }
+
+  const time = endOfDay ? "23:59:59.999" : "00:00:00.000";
+  const parsed = new Date(`${trimmed}T${time}+03:00`);
+  const timestamp = parsed.getTime();
+
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function getTimestampMillis(timestamp: any) {
+  if (!timestamp) return null;
+
+  if (typeof timestamp.toMillis === "function") {
+    return timestamp.toMillis();
+  }
+
+  if (typeof timestamp._seconds === "number") {
+    const nanoseconds =
+      typeof timestamp._nanoseconds === "number" ? timestamp._nanoseconds : 0;
+    return timestamp._seconds * 1000 + Math.floor(nanoseconds / 1_000_000);
+  }
+
+  return null;
+}
+
 export default function TransactionsPage() {
   const t = useLanguageStore((s) => s.t);
 
@@ -57,6 +86,8 @@ export default function TransactionsPage() {
   const [phoneQuery, setPhoneQuery] = useState("");
   const [batteryQuery, setBatteryQuery] = useState("");
   const [waafiQuery, setWaafiQuery] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [stationFilter, setStationFilter] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -66,6 +97,8 @@ export default function TransactionsPage() {
     phoneQuery.trim().length > 0 ||
     batteryQuery.trim().length > 0 ||
     waafiQuery.trim().length > 0 ||
+    startDate.trim().length > 0 ||
+    endDate.trim().length > 0 ||
     statusFilter !== "all" ||
     stationFilter !== "all";
 
@@ -81,6 +114,8 @@ export default function TransactionsPage() {
         phone: phoneQuery,
         battery: batteryQuery,
         waafi: waafiQuery,
+        startDate,
+        endDate,
         station: stationFilter,
         status: statusFilter,
       });
@@ -122,6 +157,8 @@ export default function TransactionsPage() {
     phoneQuery,
     batteryQuery,
     waafiQuery,
+    startDate,
+    endDate,
     stationFilter,
     statusFilter,
     hasActiveFilters,
@@ -145,11 +182,22 @@ export default function TransactionsPage() {
     const phoneSearch = phoneQuery.replace(/\D/g, "");
     const batterySearch = batteryQuery.trim().toLowerCase();
     const waafiSearch = waafiQuery.trim().toLowerCase();
+    const startBoundary = parseSomaliaDateBoundary(startDate, false);
+    const endBoundary = parseSomaliaDateBoundary(endDate, true);
+    const rangeStart =
+      startBoundary !== null && endBoundary !== null
+        ? Math.min(startBoundary, endBoundary)
+        : startBoundary;
+    const rangeEnd =
+      startBoundary !== null && endBoundary !== null
+        ? Math.max(startBoundary, endBoundary)
+        : endBoundary;
 
     return transactions.filter((tx: any) => {
       const normalizedStatus = tx.status?.toLowerCase() || "";
       const normalizedStation =
         tx.imei || tx.stationCode || tx.stationName || "";
+      const txTimestampMs = getTimestampMillis(tx.timestamp);
 
       const matchesStatus =
         statusFilter === "all"
@@ -189,9 +237,26 @@ export default function TransactionsPage() {
         return false;
       }
 
+      if (rangeStart !== null && (txTimestampMs === null || txTimestampMs < rangeStart)) {
+        return false;
+      }
+
+      if (rangeEnd !== null && (txTimestampMs === null || txTimestampMs > rangeEnd)) {
+        return false;
+      }
+
       return true;
     });
-  }, [transactions, phoneQuery, batteryQuery, waafiQuery, statusFilter, stationFilter]);
+  }, [
+    transactions,
+    phoneQuery,
+    batteryQuery,
+    waafiQuery,
+    startDate,
+    endDate,
+    statusFilter,
+    stationFilter,
+  ]);
 
   const stationOptions = useMemo(() => {
     const deduped = new Map<string, string>();
@@ -216,6 +281,8 @@ export default function TransactionsPage() {
     setPhoneQuery("");
     setBatteryQuery("");
     setWaafiQuery("");
+    setStartDate("");
+    setEndDate("");
     setStatusFilter("all");
     setStationFilter("all");
   };
@@ -255,7 +322,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <div className="grid gap-3 mb-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 mb-3 md:grid-cols-2 xl:grid-cols-7">
         <div>
           <label className="block mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Phone
@@ -311,6 +378,30 @@ export default function TransactionsPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            From
+          </label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            To
+          </label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500"
+          />
         </div>
 
         <div>

@@ -262,6 +262,8 @@ export const apiService = {
     waafi = "",
     station = "",
     status = "all",
+    startDate = "",
+    endDate = "",
   }: {
     fresh?: boolean;
     phone?: string;
@@ -269,12 +271,16 @@ export const apiService = {
     waafi?: string;
     station?: string;
     status?: string;
+    startDate?: string;
+    endDate?: string;
   } = {}) => {
     const searchParams = new URLSearchParams();
     if (fresh) searchParams.set("fresh", "1");
     if (phone.trim()) searchParams.set("phone", phone.trim());
     if (battery.trim()) searchParams.set("battery", battery.trim());
     if (waafi.trim()) searchParams.set("waafi", waafi.trim());
+    if (startDate.trim()) searchParams.set("startDate", startDate.trim());
+    if (endDate.trim()) searchParams.set("endDate", endDate.trim());
     if (station.trim() && station !== "all") {
       searchParams.set("station", station.trim());
     }
@@ -290,6 +296,8 @@ export const apiService = {
       phone.trim() ||
       battery.trim() ||
       waafi.trim() ||
+      startDate.trim() ||
+      endDate.trim() ||
       (station.trim() && station !== "all") ||
       (status.trim() && status !== "all");
 
