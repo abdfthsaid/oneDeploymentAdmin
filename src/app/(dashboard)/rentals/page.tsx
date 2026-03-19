@@ -36,6 +36,11 @@ function getStatusBadge(status: string) {
   return map[status?.toLowerCase()] || map.returned;
 }
 
+function isActiveRentalStatus(status: string) {
+  const normalized = String(status || "").toLowerCase();
+  return normalized !== "returned" && normalized !== "completed";
+}
+
 function formatPhoneNumber(phone: string) {
   if (!phone) return "-";
 
@@ -80,8 +85,10 @@ export default function TransactionsPage() {
   const t = useLanguageStore((s) => s.t);
 
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [batteryRows, setBatteryRows] = useState<any[]>([]);
   const [stations, setStations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [batteryRowsLoading, setBatteryRowsLoading] = useState(false);
   const [error, setError] = useState("");
   const [phoneQuery, setPhoneQuery] = useState("");
   const [batteryQuery, setBatteryQuery] = useState("");
@@ -124,12 +131,30 @@ export default function TransactionsPage() {
 
       setTransactions(txRes.data || []);
       setExpandedId(null);
+
+      const normalizedBatteryQuery = batteryQuery.trim();
+      if (normalizedBatteryQuery) {
+        setBatteryRowsLoading(true);
+
+        const batteryRowsRes = await apiService.getTransactionHistory({
+          fresh: true,
+          battery: normalizedBatteryQuery,
+          status: "all",
+        });
+
+        if (requestId !== requestIdRef.current) return;
+
+        setBatteryRows(batteryRowsRes.data || []);
+      } else {
+        setBatteryRows([]);
+      }
     } catch (err: any) {
       if (requestId !== requestIdRef.current) return;
       setError(err.message || "Failed to fetch transaction history");
     } finally {
       if (requestId === requestIdRef.current) {
         setLoading(false);
+        setBatteryRowsLoading(false);
       }
     }
   };
@@ -276,6 +301,18 @@ export default function TransactionsPage() {
       label,
     }));
   }, [stations]);
+
+  const batteryRowSummary = useMemo(() => {
+    const activeRows = batteryRows.filter((tx: any) =>
+      isActiveRentalStatus(tx.status),
+    );
+
+    return {
+      total: batteryRows.length,
+      active: activeRows.length,
+      returned: batteryRows.length - activeRows.length,
+    };
+  }, [batteryRows]);
 
   const clearFilters = () => {
     setPhoneQuery("");
@@ -451,6 +488,99 @@ export default function TransactionsPage() {
           Clear Filters
         </button>
       </div>
+
+      {batteryQuery.trim() && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                All rows for battery {batteryQuery.trim().toUpperCase()}
+              </div>
+              <div className="text-sm text-amber-800 dark:text-amber-200">
+                This ignores the main status filter so you can inspect every
+                Firestore row for this battery.
+              </div>
+            </div>
+            <div className="text-sm text-amber-900 dark:text-amber-100">
+              Total: {batteryRowSummary.total} | Active: {batteryRowSummary.active} | Returned: {batteryRowSummary.returned}
+            </div>
+          </div>
+
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead>
+                <tr className="border-b border-amber-200 dark:border-amber-900">
+                  <th className="px-3 py-2 text-left font-medium text-amber-900 dark:text-amber-100">
+                    Date
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-amber-900 dark:text-amber-100">
+                    Phone
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-amber-900 dark:text-amber-100">
+                    Status
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-amber-900 dark:text-amber-100">
+                    Slot
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-amber-900 dark:text-amber-100">
+                    Firestore ID
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {batteryRowsLoading ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-3 py-4 text-center text-amber-800 dark:text-amber-200"
+                    >
+                      Loading battery rows...
+                    </td>
+                  </tr>
+                ) : batteryRows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-3 py-4 text-center text-amber-800 dark:text-amber-200"
+                    >
+                      No rows found for this battery
+                    </td>
+                  </tr>
+                ) : (
+                  batteryRows.map((tx: any) => (
+                    <tr
+                      key={`battery-row-${tx.id}`}
+                      className="border-b border-amber-100 dark:border-amber-900/60"
+                    >
+                      <td className="px-3 py-2 text-amber-900 dark:text-amber-100">
+                        {formatTimestamp(tx.timestamp)}
+                      </td>
+                      <td className="px-3 py-2 text-amber-900 dark:text-amber-100">
+                        {formatPhoneNumber(tx.phoneNumber)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`px-2 py-0.5 text-xs rounded-full ${getStatusBadge(
+                            tx.status,
+                          )}`}
+                        >
+                          {tx.status || "Unknown"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-amber-900 dark:text-amber-100">
+                        {tx.slot_id || "-"}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs text-amber-900 dark:text-amber-100">
+                        {tx.id || "-"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
