@@ -105,6 +105,12 @@ export default function ActiveRentalsPage() {
   const t = useLanguageStore((s) => s.t);
 
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [batteryHistoryById, setBatteryHistoryById] = useState<
+    Record<string, any[]>
+  >({});
+  const [batteryHistoryLoading, setBatteryHistoryLoading] = useState<
+    Record<string, boolean>
+  >({});
   const [stations, setStations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -154,6 +160,47 @@ export default function ActiveRentalsPage() {
       if (requestId === requestIdRef.current) {
         setLoading(false);
       }
+    }
+  };
+
+  const fetchBatteryHistory = async (batteryId: string) => {
+    const normalizedBatteryId = normalizeBatteryId(batteryId);
+    if (!normalizedBatteryId) return;
+
+    if (batteryHistoryById[normalizedBatteryId] || batteryHistoryLoading[normalizedBatteryId]) {
+      return;
+    }
+
+    setBatteryHistoryLoading((current) => ({
+      ...current,
+      [normalizedBatteryId]: true,
+    }));
+
+    try {
+      const response = await apiService.getTransactionHistory({
+        fresh: true,
+        battery: normalizedBatteryId,
+        status: "all",
+      });
+
+      setBatteryHistoryById((current) => ({
+        ...current,
+        [normalizedBatteryId]: response.data || [],
+      }));
+    } catch (error) {
+      console.error(
+        `Failed to fetch battery history for ${normalizedBatteryId}:`,
+        error,
+      );
+      setBatteryHistoryById((current) => ({
+        ...current,
+        [normalizedBatteryId]: [],
+      }));
+    } finally {
+      setBatteryHistoryLoading((current) => ({
+        ...current,
+        [normalizedBatteryId]: false,
+      }));
     }
   };
 
@@ -529,9 +576,14 @@ export default function ActiveRentalsPage() {
               ) : (
                 filteredTransactions.map((tx: any) => {
                   const isExpanded = expandedId === tx.id;
+                  const normalizedBatteryId = normalizeBatteryId(tx.battery_id);
                   const duplicateCount =
-                    duplicateCountsByBattery.get(normalizeBatteryId(tx.battery_id)) || 0;
+                    duplicateCountsByBattery.get(normalizedBatteryId) || 0;
                   const overdue = isOverdueRental(tx.timestamp);
+                  const batteryHistory =
+                    batteryHistoryById[normalizedBatteryId] || [];
+                  const isBatteryHistoryLoading =
+                    batteryHistoryLoading[normalizedBatteryId] || false;
 
                   return (
                     <Fragment key={tx.id}>
@@ -598,9 +650,12 @@ export default function ActiveRentalsPage() {
                         </td>
                         <td className="px-4 py-3">
                           <button
-                            onClick={() =>
-                              setExpandedId(isExpanded ? null : tx.id)
-                            }
+                            onClick={() => {
+                              if (!isExpanded) {
+                                void fetchBatteryHistory(tx.battery_id || "");
+                              }
+                              setExpandedId(isExpanded ? null : tx.id);
+                            }}
                             className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                           >
                             {isExpanded ? "Hide" : "View"}
@@ -673,6 +728,76 @@ export default function ActiveRentalsPage() {
                                 </div>
                               </div>
                             )}
+
+                            <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3 dark:border-blue-900/50 dark:bg-blue-900/20">
+                              <div className="mb-2 text-sm font-semibold text-blue-900 dark:text-blue-100">
+                                All rows for this battery
+                              </div>
+                              {isBatteryHistoryLoading ? (
+                                <div className="text-sm text-blue-800 dark:text-blue-200">
+                                  Loading battery rows...
+                                </div>
+                              ) : batteryHistory.length === 0 ? (
+                                <div className="text-sm text-blue-800 dark:text-blue-200">
+                                  No additional rows found
+                                </div>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full min-w-[720px] text-sm">
+                                    <thead>
+                                      <tr className="border-b border-blue-200 dark:border-blue-900/50">
+                                        <th className="px-2 py-2 text-left font-medium text-blue-900 dark:text-blue-100">
+                                          Date
+                                        </th>
+                                        <th className="px-2 py-2 text-left font-medium text-blue-900 dark:text-blue-100">
+                                          Phone
+                                        </th>
+                                        <th className="px-2 py-2 text-left font-medium text-blue-900 dark:text-blue-100">
+                                          Status
+                                        </th>
+                                        <th className="px-2 py-2 text-left font-medium text-blue-900 dark:text-blue-100">
+                                          Slot
+                                        </th>
+                                        <th className="px-2 py-2 text-left font-medium text-blue-900 dark:text-blue-100">
+                                          Firestore ID
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {batteryHistory.map((row: any) => (
+                                        <tr
+                                          key={`battery-history-${row.id}`}
+                                          className="border-b border-blue-100 dark:border-blue-900/30"
+                                        >
+                                          <td className="px-2 py-2 text-blue-900 dark:text-blue-100">
+                                            {formatTimestamp(row.timestamp)}
+                                          </td>
+                                          <td className="px-2 py-2 text-blue-900 dark:text-blue-100">
+                                            {formatPhoneNumber(row.phoneNumber)}
+                                          </td>
+                                          <td className="px-2 py-2">
+                                            <span
+                                              className={`rounded-full px-2 py-0.5 text-xs ${row.status === "returned" || row.status === "completed"
+                                                ? "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                                                : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                              }`}
+                                            >
+                                              {row.status || "Unknown"}
+                                            </span>
+                                          </td>
+                                          <td className="px-2 py-2 text-blue-900 dark:text-blue-100">
+                                            {row.slot_id || "-"}
+                                          </td>
+                                          <td className="px-2 py-2 font-mono text-xs text-blue-900 dark:text-blue-100">
+                                            {row.id || "-"}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )}
