@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { updateStationStats } from "@/lib/stationStatsJob";
 import { cacheComponent } from "@/lib/cacheComponent";
 
-const QUIET_START_HOUR = 1; // 1:00 AM UTC+3
-const QUIET_END_HOUR = 8; // 8:00 AM UTC+3
+const QUIET_START_HOUR = 2; // 2:00 AM UTC+3
+const QUIET_END_HOUR = 7; // 7:00 AM UTC+3
 
 function getNowUTC3() {
   const now = new Date();
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Quiet hours check (1 AM – 8 AM UTC+3)
+  // Quiet hours check (2 AM – 7 AM UTC+3)
   if (isQuietHours()) {
     const nowUtc3 = getNowUTC3();
     console.log(
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       ).padStart(2, "0")} — skipping station update`,
     );
     return NextResponse.json({
-      message: "Skipped: quiet hours (01:00–08:00 UTC+3)",
+      message: "Skipped: quiet hours (02:00–07:00 UTC+3)",
       timestamp: new Date().toISOString(),
     });
   }
