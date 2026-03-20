@@ -1,3 +1,15 @@
+export type ActiveRentalRow = {
+  id: string;
+  battery_id?: string;
+  phoneNumber?: string;
+  timestamp?: any;
+  imei?: string;
+  amount?: number;
+  unlockStatus?: string | null;
+  doc?: any;
+  [key: string]: any;
+};
+
 export function getRentalTimestampMillis(value: any): number {
   if (!value) return 0;
   if (typeof value?.toMillis === "function") return value.toMillis();

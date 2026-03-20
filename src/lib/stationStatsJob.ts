@@ -1,7 +1,7 @@
 import { admin } from "./firebase-admin";
 import db from "./firebase-admin";
 import axios from "axios";
-import { groupActiveRentalsByBattery } from "./activeRentals";
+import { ActiveRentalRow, groupActiveRentalsByBattery } from "./activeRentals";
 import { cacheComponent } from "./cacheComponent";
 
 const MACHINE_CAPACITY = 8;
@@ -205,11 +205,13 @@ export async function updateSingleStation(imei: string) {
     let overdueCount = 0;
     const nowDate = now.toDate();
 
-    const allActiveRentals = rentalsSnap.docs.map((rentalDoc) => ({
-      doc: rentalDoc,
-      id: rentalDoc.id,
-      ...rentalDoc.data(),
-    }));
+    const allActiveRentals: ActiveRentalRow[] = rentalsSnap.docs.map(
+      (rentalDoc) => ({
+        doc: rentalDoc,
+        id: rentalDoc.id,
+        ...(rentalDoc.data() as Record<string, any>),
+      }),
+    );
 
     const rentalGroups = groupActiveRentalsByBattery(
       allActiveRentals,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/firebase-admin';
 import { authenticateRequest } from '@/lib/auth';
 import {
+  ActiveRentalRow,
   groupActiveRentalsByBattery,
   getRentalTimestampMillis,
 } from '@/lib/activeRentals';
@@ -136,12 +137,14 @@ export async function GET(req: NextRequest, { params }: { params: { imei: string
         .where('status', '==', 'rented')
         .get();
 
-      const rentalGroups = groupActiveRentalsByBattery(
-        rentalsSnap.docs.map((rentalDoc) => ({
+      const activeRentals: ActiveRentalRow[] = rentalsSnap.docs.map(
+        (rentalDoc) => ({
           id: rentalDoc.id,
-          ...rentalDoc.data(),
-        })),
+          ...(rentalDoc.data() as Record<string, any>),
+        }),
       );
+
+      const rentalGroups = groupActiveRentalsByBattery(activeRentals);
 
       const station = buildLiveStationView(
         doc.data(),
