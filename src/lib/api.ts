@@ -33,6 +33,7 @@ export const API_ENDPOINTS = {
   // Transactions
   LATEST_TRANSACTIONS: "/api/transactions/latest",
   TRANSACTION_HISTORY: "/api/transactions/history",
+  RENTAL_MARK_RETURNED: "/api/rentals/mark-returned",
   // Revenue
   DAILY_REVENUE: "/api/revenue/daily",
   MONTHLY_REVENUE: "/api/revenue/monthly",
@@ -314,6 +315,19 @@ export const apiService = {
     invalidateApiGetCachePrefixes([API_ENDPOINTS.TRANSACTION_HISTORY]);
     return response;
   },
+  markRentalReturned: (id: string, note = "") =>
+    runMutation(
+      apiClient.patch(API_ENDPOINTS.RENTAL_MARK_RETURNED, { id, note }),
+      [
+        API_ENDPOINTS.TRANSACTION_HISTORY,
+        API_ENDPOINTS.STATIONS_STATS,
+        API_ENDPOINTS.DASHBOARD_SUMMARY,
+        "/api/revenue",
+        "/api/customers",
+        "/api/charts",
+        API_ENDPOINTS.CHARTS_ALL,
+      ],
+    ),
 
   // Revenue
   getDailyRevenue: (imei?: string) =>

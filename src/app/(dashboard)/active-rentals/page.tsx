@@ -15,6 +15,8 @@ import {
 
 import { apiService } from "@/lib/api";
 import { normalizeBatteryId } from "@/lib/batteryId";
+import { getUserRole, ROLES } from "@/lib/utils/permissions";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
 const OVERDUE_HOURS = 5;
@@ -103,6 +105,8 @@ function getStatusBadgeClasses(status: "active" | "overdue" | "duplicate") {
 
 export default function ActiveRentalsPage() {
   const t = useLanguageStore((s) => s.t);
+  const user = useAuthStore((s) => s.user);
+  const userRole = getUserRole(user);
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [batteryHistoryById, setBatteryHistoryById] = useState<
@@ -121,6 +125,7 @@ export default function ActiveRentalsPage() {
   const [stationFilter, setStationFilter] = useState("all");
   const [viewFilter, setViewFilter] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [updatingRentalId, setUpdatingRentalId] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
   const hasServerFilters =
@@ -346,6 +351,44 @@ export default function ActiveRentalsPage() {
     setEndDate("");
     setStationFilter("all");
     setViewFilter("all");
+  };
+
+  const handleMarkReturned = async (tx: any) => {
+    if (!tx?.id) return;
+
+    const confirmed =
+      typeof window === "undefined"
+        ? true
+        : window.confirm(
+            `Mark battery ${tx.battery_id || "-"} for phone ${formatPhoneNumber(
+              tx.phoneNumber || "",
+            )} as returned?`,
+          );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setUpdatingRentalId(tx.id);
+      await apiService.markRentalReturned(
+        tx.id,
+        `Manually marked returned from Active Rentals by ${user?.username || "admin"}`,
+      );
+
+      const normalizedBatteryId = normalizeBatteryId(tx.battery_id);
+      setBatteryHistoryById((current) => ({
+        ...current,
+        [normalizedBatteryId]: [],
+      }));
+
+      await fetchActiveRentals(true);
+      await fetchBatteryHistory(tx.battery_id || "");
+    } catch (error: any) {
+      setError(error.message || "Failed to mark rental returned");
+    } finally {
+      setUpdatingRentalId(null);
+    }
   };
 
   const viewOptions = [
@@ -726,6 +769,20 @@ export default function ActiveRentalsPage() {
                                     This battery currently has {duplicateCount} active rental rows.
                                   </span>
                                 </div>
+                              </div>
+                            )}
+
+                            {userRole === ROLES.ADMIN && (
+                              <div className="mt-4">
+                                <button
+                                  onClick={() => void handleMarkReturned(tx)}
+                                  disabled={updatingRentalId === tx.id}
+                                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {updatingRentalId === tx.id
+                                    ? "Marking..."
+                                    : "Mark Returned"}
+                                </button>
                               </div>
                             )}
 
