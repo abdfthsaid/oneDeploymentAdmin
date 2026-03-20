@@ -78,6 +78,7 @@ export function getAllowedRoutes(user: User | null): string[] {
   const role = getUserRole(user);
   const baseRoutes = [
     "/slots",
+    "/active-rentals",
     "/settings",
     "/notifications",
     "/powerbanks",

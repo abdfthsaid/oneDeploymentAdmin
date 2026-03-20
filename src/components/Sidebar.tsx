@@ -42,6 +42,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
           section: "OPERATIONS",
           items: [
             { id: "slots", label: t("slots"), icon: faBatteryThreeQuarters },
+            { id: "active-rentals", label: t("rentals"), icon: faExchangeAlt },
             { id: "rentals", label: t("transactions"), icon: faExchangeAlt },
           ],
         },
@@ -70,6 +71,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
               icon: faChartBar,
             },
             { id: "slots", label: t("slots"), icon: faBatteryThreeQuarters },
+            { id: "active-rentals", label: t("rentals"), icon: faExchangeAlt },
             { id: "rentals", label: t("transactions"), icon: faExchangeAlt },
             {
               id: "problem-slots",
@@ -104,6 +106,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
               icon: faChartBar,
             },
             { id: "slots", label: t("slots"), icon: faBatteryThreeQuarters },
+            { id: "active-rentals", label: t("rentals"), icon: faExchangeAlt },
             { id: "rentals", label: t("transactions"), icon: faExchangeAlt },
             {
               id: "problem-slots",
