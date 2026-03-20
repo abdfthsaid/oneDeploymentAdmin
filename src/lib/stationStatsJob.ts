@@ -1,6 +1,7 @@
 import { admin } from "./firebase-admin";
 import db from "./firebase-admin";
 import axios from "axios";
+import { dedupeActiveRentalsByBattery } from "./activeRentals";
 import { cacheComponent } from "./cacheComponent";
 
 const MACHINE_CAPACITY = 8;
@@ -193,10 +194,10 @@ export async function updateSingleStation(imei: string) {
       }
     }
 
-    // 8. Fetch ongoing rentals for this station after global auto-return pass
+    // 8. Fetch all active rentals after global auto-return pass so duplicate
+    // battery rentals are resolved consistently across every station.
     const rentalsSnap = await db
       .collection("rentals")
-      .where("imei", "==", imei)
       .where("status", "==", "rented")
       .get();
 
@@ -204,51 +205,39 @@ export async function updateSingleStation(imei: string) {
     let overdueCount = 0;
     const nowDate = now.toDate();
 
-    // 9. Deduplicate rentals by battery_id IN MEMORY — keep only the latest per battery
-    const latestByBattery = new Map<
-      string,
-      { doc: any; data: any; ts: number }
-    >();
+    const allActiveRentals = rentalsSnap.docs.map((rentalDoc) => ({
+      doc: rentalDoc,
+      id: rentalDoc.id,
+      ...rentalDoc.data(),
+    }));
 
-    for (const rentalDoc of rentalsSnap.docs) {
-      const r = rentalDoc.data();
-      const { battery_id } = r;
-      if (!battery_id) continue;
+    const { winners, duplicates } = dedupeActiveRentalsByBattery(
+      allActiveRentals,
+    );
 
-      const ts = r.timestamp?.toMillis?.() || 0;
-      const existing = latestByBattery.get(battery_id);
-
-      if (!existing || ts > existing.ts) {
-        // This rental is newer — mark the old one for closure
-        if (existing) {
-          await existing.doc.ref.update({
-            status: "returned",
-            returnedAt: now,
-            note: "Auto-closed: duplicate battery rental",
-          });
-          console.error(
-            `🛑 Closed duplicate rental for battery ${battery_id} (phone: ${existing.data.phoneNumber})`,
-          );
-        }
-        latestByBattery.set(battery_id, { doc: rentalDoc, data: r, ts });
-      } else {
-        // This rental is older — close it immediately
-        await rentalDoc.ref.update({
-          status: "returned",
-          returnedAt: now,
-          note: "Auto-closed: duplicate battery rental",
-        });
-        console.error(
-          `🛑 Closed duplicate rental for battery ${battery_id} (phone: ${r.phoneNumber})`,
-        );
-      }
+    for (const duplicate of duplicates) {
+      await duplicate.doc.ref.update({
+        status: "returned",
+        returnedAt: now,
+        note: "Auto-closed: duplicate battery rental",
+      });
+      console.error(
+        `🛑 Closed duplicate rental for battery ${duplicate.battery_id} (phone: ${duplicate.phoneNumber})`,
+      );
     }
 
     // 10. Build valid rentals list for batteries still out in the field
     const validRentals: { doc: any; data: any }[] = [];
 
-    for (const [battery_id, entry] of Array.from(latestByBattery.entries())) {
-      validRentals.push({ doc: entry.doc, data: entry.data });
+    for (const rental of winners) {
+      if (rental.imei !== imei) {
+        continue;
+      }
+
+      validRentals.push({
+        doc: rental.doc,
+        data: rental,
+      });
     }
 
     // 11. Assign each valid rental to first available virtual slot
