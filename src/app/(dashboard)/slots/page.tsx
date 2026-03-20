@@ -199,8 +199,14 @@ function SlotCard({ slot }: { slot: any }) {
           activeRenters.length > 0 && (
             <div className="mt-2 space-y-1 text-xs">
               {hasDuplicateRentals && (
-                <div className="rounded-lg border border-amber-400 bg-amber-50 px-2 py-1 font-semibold text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                  Duplicate active rentals: {activeRenters.length}
+                <div className="flex items-center gap-2 rounded-lg border border-amber-400 bg-amber-50 px-2 py-1 font-semibold text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                  <FontAwesomeIcon icon={faExclamationTriangle} />
+                  <span>Duplicate active rentals: {activeRenters.length}</span>
+                </div>
+              )}
+              {!hasDuplicateRentals && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 font-semibold text-blue-700 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300">
+                  Active rentals: {activeRenters.length}
                 </div>
               )}
               {activeRenters.map((renter: any, index: number) => (
