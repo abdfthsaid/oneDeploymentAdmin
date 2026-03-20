@@ -24,22 +24,51 @@ export function compareRentalPriorityDesc(a: any, b: any): number {
   return getSortableRentalId(b).localeCompare(getSortableRentalId(a));
 }
 
-export function dedupeActiveRentalsByBattery<T extends { battery_id?: string }>(
+export function groupActiveRentalsByBattery<T extends { battery_id?: string }>(
   rentals: T[],
 ) {
-  const latestByBattery = new Map<string, T>();
-  const duplicates: T[] = [];
+  const groups = new Map<
+    string,
+    {
+      batteryId: string;
+      primary: T;
+      rentals: T[];
+      duplicates: T[];
+    }
+  >();
 
   for (const rental of [...rentals].sort(compareRentalPriorityDesc)) {
     const batteryId = String(rental?.battery_id || "");
     if (!batteryId) continue;
 
-    if (!latestByBattery.has(batteryId)) {
-      latestByBattery.set(batteryId, rental);
+    const existing = groups.get(batteryId);
+    if (!existing) {
+      groups.set(batteryId, {
+        batteryId,
+        primary: rental,
+        rentals: [rental],
+        duplicates: [],
+      });
       continue;
     }
 
-    duplicates.push(rental);
+    existing.rentals.push(rental);
+    existing.duplicates.push(rental);
+  }
+
+  return Array.from(groups.values());
+}
+
+export function dedupeActiveRentalsByBattery<T extends { battery_id?: string }>(
+  rentals: T[],
+) {
+  const groups = groupActiveRentalsByBattery(rentals);
+  const latestByBattery = new Map<string, T>();
+  const duplicates: T[] = [];
+
+  for (const group of groups) {
+    latestByBattery.set(group.batteryId, group.primary);
+    duplicates.push(...group.duplicates);
   }
 
   return {

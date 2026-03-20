@@ -1,7 +1,7 @@
 import { admin } from "./firebase-admin";
 import db from "./firebase-admin";
 import axios from "axios";
-import { dedupeActiveRentalsByBattery } from "./activeRentals";
+import { groupActiveRentalsByBattery } from "./activeRentals";
 import { cacheComponent } from "./cacheComponent";
 
 const MACHINE_CAPACITY = 8;
@@ -194,8 +194,8 @@ export async function updateSingleStation(imei: string) {
       }
     }
 
-    // 8. Fetch all active rentals after global auto-return pass so duplicate
-    // battery rentals are resolved consistently across every station.
+    // 8. Fetch all active rentals after global auto-return pass so station
+    // counts and virtual cards can be built from the current Firestore truth.
     const rentalsSnap = await db
       .collection("rentals")
       .where("status", "==", "rented")
@@ -211,32 +211,21 @@ export async function updateSingleStation(imei: string) {
       ...rentalDoc.data(),
     }));
 
-    const { winners, duplicates } = dedupeActiveRentalsByBattery(
+    const rentalGroups = groupActiveRentalsByBattery(
       allActiveRentals,
     );
-
-    for (const duplicate of duplicates) {
-      await duplicate.doc.ref.update({
-        status: "returned",
-        returnedAt: now,
-        note: "Auto-closed: duplicate battery rental",
-      });
-      console.error(
-        `🛑 Closed duplicate rental for battery ${duplicate.battery_id} (phone: ${duplicate.phoneNumber})`,
-      );
-    }
 
     // 10. Build valid rentals list for batteries still out in the field
     const validRentals: { doc: any; data: any }[] = [];
 
-    for (const rental of winners) {
-      if (rental.imei !== imei) {
+    for (const group of rentalGroups) {
+      if (group.primary.imei !== imei) {
         continue;
       }
 
       validRentals.push({
-        doc: rental.doc,
-        data: rental,
+        doc: group.primary.doc,
+        data: group.primary,
       });
     }
 

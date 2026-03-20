@@ -114,9 +114,32 @@ const getStatusInfo = (slot: any) => {
   return { statusText, badgeClass, buttonClass, borderClass, icon };
 };
 
+const getActiveRenters = (slot: any) => {
+  if (Array.isArray(slot.activeRentals) && slot.activeRentals.length > 0) {
+    return slot.activeRentals;
+  }
+
+  if (!slot.phoneNumber) {
+    return [];
+  }
+
+  return [
+    {
+      id: slot.rentalId || null,
+      phoneNumber: slot.phoneNumber,
+      rentedAt: slot.rentedAt || null,
+      amount: slot.amount || 0,
+      imei: slot.imei || null,
+      unlockStatus: slot.unlockStatus || null,
+    },
+  ];
+};
+
 function SlotCard({ slot }: { slot: any }) {
   const { statusText, badgeClass, buttonClass, borderClass, icon } =
     getStatusInfo(slot);
+  const activeRenters = getActiveRenters(slot);
+  const hasDuplicateRentals = activeRenters.length > 1;
 
   return (
     <div
@@ -173,18 +196,35 @@ function SlotCard({ slot }: { slot: any }) {
         {(statusText === "Occupied" ||
           statusText === "Overdue" ||
           statusText === "Missing") &&
-          slot.phoneNumber && (
+          activeRenters.length > 0 && (
             <div className="mt-2 space-y-1 text-xs">
-              <div className="flex items-center gap-2 px-2 py-1 text-blue-600 rounded-lg bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400">
-                <FontAwesomeIcon icon={faPhone} className="text-sm" />
-                <span>{slot.phoneNumber}</span>
-              </div>
-              {slot.rentedAt?._seconds && (
-                <div className="flex items-center gap-2 px-2 py-1 text-green-600 rounded-lg bg-green-50 dark:bg-green-900/30 dark:text-green-400">
-                  <FontAwesomeIcon icon={faClock} className="text-sm" />
-                  <span>Rented: {timeAgo(slot.rentedAt._seconds)}</span>
+              {hasDuplicateRentals && (
+                <div className="rounded-lg border border-amber-400 bg-amber-50 px-2 py-1 font-semibold text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                  Duplicate active rentals: {activeRenters.length}
                 </div>
               )}
+              {activeRenters.map((renter: any, index: number) => (
+                <div
+                  key={renter.id || `${slot.battery_id || slot.slot_id}-${index}`}
+                  className="space-y-1 rounded-lg border border-blue-100 bg-blue-50 p-2 dark:border-blue-900/50 dark:bg-blue-900/20"
+                >
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                    <FontAwesomeIcon icon={faPhone} className="text-sm" />
+                    <span>{renter.phoneNumber || "-"}</span>
+                  </div>
+                  {renter.rentedAt?._seconds && (
+                    <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                      <FontAwesomeIcon icon={faClock} className="text-sm" />
+                      <span>Rented: {timeAgo(renter.rentedAt._seconds)}</span>
+                    </div>
+                  )}
+                  {renter.id && (
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                      Rental ID: {renter.id}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
       </div>

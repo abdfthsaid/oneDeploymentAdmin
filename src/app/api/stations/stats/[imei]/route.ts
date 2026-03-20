@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/firebase-admin';
 import { authenticateRequest } from '@/lib/auth';
 import {
-  dedupeActiveRentalsByBattery,
+  groupActiveRentalsByBattery,
   getRentalTimestampMillis,
 } from '@/lib/activeRentals';
 import { updateSingleStation } from '@/lib/stationStatsJob';
 
 const OVERDUE_HOURS = 5;
 
-function buildLiveStationView(station: any, rentals: any[]) {
+function buildLiveStationView(station: any, rentalGroups: any[]) {
   const sourceSlots = Array.isArray(station?.batteries) ? station.batteries : [];
   const slots = sourceSlots.map((slot: any) => {
     const normalizedStatus = String(slot?.status || '').toLowerCase();
@@ -38,18 +38,17 @@ function buildLiveStationView(station: any, rentals: any[]) {
     };
   });
 
-  const { winners } = dedupeActiveRentalsByBattery(rentals);
-
   let rentedCount = 0;
   let overdueCount = 0;
   const now = Date.now();
 
-  for (const rental of winners.sort((a, b) => {
+  for (const group of [...rentalGroups].sort((a, b) => {
     return (
-      getRentalTimestampMillis(b.timestamp) -
-      getRentalTimestampMillis(a.timestamp)
+      getRentalTimestampMillis(b.primary?.timestamp) -
+      getRentalTimestampMillis(a.primary?.timestamp)
     );
   })) {
+    const rental = group.primary;
     const assignedSlotIndex = slots.findIndex((slot: any) => {
       return (
         String(slot?.status || '').toLowerCase() === 'empty' &&
@@ -62,7 +61,19 @@ function buildLiveStationView(station: any, rentals: any[]) {
       continue;
     }
 
-    const rentedAtMs = getRentalTimestampMillis(rental.timestamp);
+    const activeRentals = group.rentals.map((entry: any) => ({
+      id: entry.id || null,
+      phoneNumber: entry.phoneNumber || '',
+      rentedAt: entry.timestamp || null,
+      amount: entry.amount || 0,
+      imei: entry.imei || null,
+      unlockStatus: entry.unlockStatus || null,
+    }));
+    const overdueSource = activeRentals
+      .map((entry: any) => getRentalTimestampMillis(entry.rentedAt))
+      .filter((value: number) => value > 0);
+    const rentedAtMs =
+      overdueSource.length > 0 ? Math.min(...overdueSource) : 0;
     const isOverdue =
       rentedAtMs > 0 && now - rentedAtMs > OVERDUE_HOURS * 60 * 60 * 1000;
 
@@ -77,6 +88,9 @@ function buildLiveStationView(station: any, rentals: any[]) {
       amount: rental.amount || 0,
       rentalId: rental.id || null,
       unlockStatus: rental.unlockStatus || null,
+      activeRentals,
+      activeRentalCount: activeRentals.length,
+      hasDuplicateRentals: activeRentals.length > 1,
     };
 
     rentedCount++;
@@ -122,7 +136,7 @@ export async function GET(req: NextRequest, { params }: { params: { imei: string
         .where('status', '==', 'rented')
         .get();
 
-      const { winners } = dedupeActiveRentalsByBattery(
+      const rentalGroups = groupActiveRentalsByBattery(
         rentalsSnap.docs.map((rentalDoc) => ({
           id: rentalDoc.id,
           ...rentalDoc.data(),
@@ -131,7 +145,7 @@ export async function GET(req: NextRequest, { params }: { params: { imei: string
 
       const station = buildLiveStationView(
         doc.data(),
-        winners.filter((rental: any) => rental.imei === imei),
+        rentalGroups.filter((group: any) => group.primary?.imei === imei),
       );
 
       return {
