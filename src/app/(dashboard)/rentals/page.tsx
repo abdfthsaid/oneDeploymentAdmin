@@ -689,6 +689,30 @@ export default function TransactionsPage() {
                             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                               <div>
                                 <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Requested Phone
+                                </div>
+                                <div className="mt-1 text-sm dark:text-white">
+                                  {formatPhoneNumber(tx.phoneNumber)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Waafi Account
+                                </div>
+                                <div className="mt-1 text-sm dark:text-white">
+                                  {tx.waafiAccountNo || "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Waafi State
+                                </div>
+                                <div className="mt-1 text-sm dark:text-white">
+                                  {tx.waafiState || "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                                   Waafi Transaction ID
                                 </div>
                                 <div className="mt-1 break-all font-mono text-sm dark:text-white">
@@ -697,10 +721,42 @@ export default function TransactionsPage() {
                               </div>
                               <div>
                                 <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Waafi Response Code
+                                </div>
+                                <div className="mt-1 break-all font-mono text-sm dark:text-white">
+                                  {tx.waafiResponseCode || "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Waafi Error Code
+                                </div>
+                                <div className="mt-1 break-all font-mono text-sm dark:text-white">
+                                  {tx.waafiErrorCode || "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Waafi Response Message
+                                </div>
+                                <div className="mt-1 text-sm dark:text-white">
+                                  {tx.waafiResponseMsg || "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                                   Issuer Transaction ID
                                 </div>
                                 <div className="mt-1 break-all font-mono text-sm dark:text-white">
                                   {tx.issuerTransactionId || "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  Waafi Amount
+                                </div>
+                                <div className="mt-1 text-sm dark:text-white">
+                                  {tx.waafiTxAmount || "-"}
                                 </div>
                               </div>
                               <div>
