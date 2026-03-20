@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
 import { cacheComponent } from "@/lib/cacheComponent";
 import db from "@/lib/firebase-admin";
+import { RENTALS_COLLECTION } from "@/lib/rentalsCollection";
 
 export async function PATCH(req: NextRequest) {
   const auth = authenticateRequest(req);
@@ -22,7 +23,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const rentalRef = db.collection("rentals").doc(id);
+    const rentalRef = db.collection(RENTALS_COLLECTION).doc(id);
     const rentalSnap = await rentalRef.get();
 
     if (!rentalSnap.exists) {

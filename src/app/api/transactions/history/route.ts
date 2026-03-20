@@ -7,6 +7,7 @@ import {
   buildPrivateCacheControl,
   cacheComponent,
 } from "@/lib/cacheComponent";
+import { RENTALS_COLLECTION } from "@/lib/rentalsCollection";
 
 const CACHE_TTL_MS = 20_000;
 const SOMALIA_UTC_OFFSET = "+03:00";
@@ -106,7 +107,7 @@ export async function GET(req: NextRequest) {
 
     const loadTransactions = async () => {
       const rentalsSnapshot = await db
-        .collection("rentals")
+        .collection(RENTALS_COLLECTION)
         .orderBy("timestamp", "desc")
         .get();
 

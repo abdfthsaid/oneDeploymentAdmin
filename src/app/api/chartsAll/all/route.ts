@@ -3,6 +3,7 @@ import db from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
 import { applyRevenueCuts } from "@/lib/timeUtils";
 import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
+import { RENTALS_COLLECTION } from "@/lib/rentalsCollection";
 
 const CACHE_TTL_MS = 60_000;
 const SOMALIA_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+3
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
       "charts:all",
       CACHE_TTL_MS,
       async () => {
-        const rentalsSnapshot = await db.collection("rentals").get();
+        const rentalsSnapshot = await db.collection(RENTALS_COLLECTION).get();
 
         const dailyRevenue: Record<string, number> = {};
         const weeklyRevenue: Record<string, number> = {};

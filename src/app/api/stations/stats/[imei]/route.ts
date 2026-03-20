@@ -7,6 +7,7 @@ import {
   getRentalTimestampMillis,
 } from '@/lib/activeRentals';
 import { normalizeBatteryId } from '@/lib/batteryId';
+import { RENTALS_COLLECTION } from '@/lib/rentalsCollection';
 import { updateSingleStation } from '@/lib/stationStatsJob';
 
 const OVERDUE_HOURS = 5;
@@ -134,7 +135,7 @@ export async function GET(req: NextRequest, { params }: { params: { imei: string
       }
 
       const rentalsSnap = await db
-        .collection('rentals')
+        .collection(RENTALS_COLLECTION)
         .where('status', '==', 'rented')
         .get();
 

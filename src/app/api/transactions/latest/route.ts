@@ -3,6 +3,7 @@ import db from "@/lib/firebase-admin";
 import { admin } from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
 import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
+import { RENTALS_COLLECTION } from "@/lib/rentalsCollection";
 
 const CACHE_TTL_MS = 20_000;
 
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
         );
 
         const rentalsSnapshot = await db
-          .collection("rentals")
+          .collection(RENTALS_COLLECTION)
           .where("status", "in", ["rented", "returned"])
           .where("timestamp", ">=", twoDaysAgo)
           .orderBy("timestamp", "desc")

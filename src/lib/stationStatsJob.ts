@@ -4,6 +4,7 @@ import axios from "axios";
 import { ActiveRentalRow, groupActiveRentalsByBattery } from "./activeRentals";
 import { normalizeBatteryId } from "./batteryId";
 import { cacheComponent } from "./cacheComponent";
+import { RENTALS_COLLECTION } from "./rentalsCollection";
 
 const MACHINE_CAPACITY = 8;
 const ALL_STATIONS = [
@@ -153,7 +154,7 @@ export async function updateSingleStation(imei: string) {
     // 7. Fetch all active rentals once, then auto-return any whose battery is
     // physically present in a station using normalized battery IDs.
     const rentalsSnap = await db
-      .collection("rentals")
+      .collection(RENTALS_COLLECTION)
       .where("status", "==", "rented")
       .get();
 

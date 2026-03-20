@@ -5,6 +5,7 @@ import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
 import { getMonthBoundsUTC3, calculateUniqueRevenue } from "@/lib/timeUtils";
 import { imeiToStationCode } from "@/lib/imeiMap";
 import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
+import { RENTALS_COLLECTION } from "@/lib/rentalsCollection";
 
 const CACHE_TTL_MS = 30_000;
 
@@ -40,7 +41,7 @@ export async function GET(
       async () => {
         const Timestamp = admin.firestore.Timestamp;
         const snapshot = await db
-          .collection("rentals")
+          .collection(RENTALS_COLLECTION)
           .where("stationCode", "==", stationCode)
           .where("timestamp", ">=", Timestamp.fromDate(startUtc))
           .where("timestamp", "<", Timestamp.fromDate(endUtc))

@@ -4,6 +4,7 @@ import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
 import { applyRevenueCuts } from "@/lib/timeUtils";
 import { imeiToStationCode } from "@/lib/imeiMap";
 import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
+import { RENTALS_COLLECTION } from "@/lib/rentalsCollection";
 
 const CACHE_TTL_MS = 60_000;
 const SOMALIA_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+3
@@ -75,7 +76,7 @@ export async function GET(
       CACHE_TTL_MS,
       async () => {
         const snapshot = await db
-          .collection("rentals")
+          .collection(RENTALS_COLLECTION)
           .where("stationCode", "==", stationCode)
           .where("status", "in", ["rented", "returned"])
           .get();

@@ -4,6 +4,7 @@ import { admin } from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
 import { getMonthBoundsUTC3 } from "@/lib/timeUtils";
 import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
+import { RENTALS_COLLECTION } from "@/lib/rentalsCollection";
 
 const CACHE_TTL_MS = 30_000;
 
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
       async () => {
         const Timestamp = admin.firestore.Timestamp;
         const snapshot = await db
-          .collection("rentals")
+          .collection(RENTALS_COLLECTION)
           .where("timestamp", ">=", Timestamp.fromDate(startUtc))
           .where("timestamp", "<", Timestamp.fromDate(endUtc))
           .where("status", "in", ["rented", "returned"])
