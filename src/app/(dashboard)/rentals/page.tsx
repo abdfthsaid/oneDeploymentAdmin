@@ -9,6 +9,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 import { apiService } from "@/lib/api";
+import { normalizeBatteryId } from "@/lib/batteryId";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
 function formatTimestamp(timestamp: any) {
@@ -205,7 +206,7 @@ export default function TransactionsPage() {
 
   const filteredTransactions = useMemo(() => {
     const phoneSearch = phoneQuery.replace(/\D/g, "");
-    const batterySearch = batteryQuery.trim().toLowerCase();
+    const batterySearch = normalizeBatteryId(batteryQuery);
     const waafiSearch = waafiQuery.trim().toLowerCase();
     const startBoundary = parseSomaliaDateBoundary(startDate, false);
     const endBoundary = parseSomaliaDateBoundary(endDate, true);
@@ -239,7 +240,7 @@ export default function TransactionsPage() {
       }
 
       const txPhone = String(tx.phoneNumber || "").replace(/\D/g, "");
-      const txBattery = String(tx.battery_id || "").toLowerCase();
+      const txBattery = normalizeBatteryId(tx.battery_id);
       const txWaafiValues = [
         tx.transactionId,
         tx.issuerTransactionId,

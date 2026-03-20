@@ -1,3 +1,5 @@
+import { normalizeBatteryId } from "./batteryId";
+
 export type ActiveRentalRow = {
   id: string;
   battery_id?: string;
@@ -50,7 +52,7 @@ export function groupActiveRentalsByBattery<T extends { battery_id?: string }>(
   >();
 
   for (const rental of [...rentals].sort(compareRentalPriorityDesc)) {
-    const batteryId = String(rental?.battery_id || "");
+    const batteryId = normalizeBatteryId(rental?.battery_id);
     if (!batteryId) continue;
 
     const existing = groups.get(batteryId);

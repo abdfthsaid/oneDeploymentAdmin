@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import db from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
+import { normalizeBatteryId } from "@/lib/batteryId";
 import {
   buildPrivateCacheControl,
   cacheComponent,
@@ -75,8 +76,7 @@ export async function GET(req: NextRequest) {
       .replace(/\D/g, "")
       .trim();
     const batteryQuery = (req.nextUrl.searchParams.get("battery") || "")
-      .trim()
-      .toLowerCase();
+      .trim();
     const waafiQuery = (req.nextUrl.searchParams.get("waafi") || "")
       .trim()
       .toLowerCase();
@@ -149,7 +149,7 @@ export async function GET(req: NextRequest) {
       return enrichedRentals.filter((r: any) => {
         const normalizedStatus = String(r.status || "").toLowerCase();
         const normalizedPhone = String(r.phoneNumber || "").replace(/\D/g, "");
-        const normalizedBattery = String(r.battery_id || "").toLowerCase();
+        const normalizedBattery = normalizeBatteryId(r.battery_id);
         const timestampMs = getTimestampMillis(r.timestamp);
         const normalizedStationText = [
           r.imei,
@@ -188,7 +188,10 @@ export async function GET(req: NextRequest) {
           return false;
         }
 
-        if (batteryQuery && !normalizedBattery.includes(batteryQuery)) {
+        if (
+          batteryQuery &&
+          !normalizedBattery.includes(normalizeBatteryId(batteryQuery))
+        ) {
           return false;
         }
 

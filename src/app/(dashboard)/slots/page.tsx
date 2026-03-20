@@ -17,6 +17,7 @@ import {
   faSyncAlt,
 } from "@fortawesome/free-solid-svg-icons";
 import { apiService } from "@/lib/api";
+import { normalizeBatteryId } from "@/lib/batteryId";
 
 const timeAgo = (seconds: number) => {
   const diff = Math.floor(Date.now() / 1000) - seconds;
@@ -360,7 +361,7 @@ export default function SlotsPage() {
     (s: any) =>
       !search ||
       s.slot_id?.toString().includes(search) ||
-      s.battery_id?.toLowerCase().includes(search.toLowerCase()) ||
+      normalizeBatteryId(s.battery_id).includes(normalizeBatteryId(search)) ||
       s.status?.toLowerCase().includes(search.toLowerCase()),
   );
 

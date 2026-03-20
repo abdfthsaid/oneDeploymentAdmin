@@ -6,6 +6,7 @@ import {
   groupActiveRentalsByBattery,
   getRentalTimestampMillis,
 } from '@/lib/activeRentals';
+import { normalizeBatteryId } from '@/lib/batteryId';
 import { updateSingleStation } from '@/lib/stationStatsJob';
 
 const OVERDUE_HOURS = 5;
@@ -80,7 +81,7 @@ function buildLiveStationView(station: any, rentalGroups: any[]) {
 
     slots[assignedSlotIndex] = {
       ...slots[assignedSlotIndex],
-      battery_id: rental.battery_id,
+      battery_id: group.batteryId || normalizeBatteryId(rental.battery_id),
       level: null,
       status: isOverdue ? 'Overdue' : 'Rented',
       rented: true,

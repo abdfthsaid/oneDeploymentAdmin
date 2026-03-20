@@ -2,6 +2,7 @@ import { admin } from "./firebase-admin";
 import db from "./firebase-admin";
 import axios from "axios";
 import { ActiveRentalRow, groupActiveRentalsByBattery } from "./activeRentals";
+import { normalizeBatteryId } from "./batteryId";
 import { cacheComponent } from "./cacheComponent";
 
 const MACHINE_CAPACITY = 8;
@@ -13,22 +14,10 @@ const ALL_STATIONS = [
   "WSEP161741066503",
 ];
 
-const FIRESTORE_IN_QUERY_LIMIT = 10;
-
 // Only active stations (the others return HTTP 402 — shut down)
 export const ACTIVE_STATIONS = ["WSEP161741066502", "WSEP161741066503"];
 
 const stationCache: Record<string, any> = {};
-
-function chunkValues<T>(values: T[], size: number) {
-  const chunks: T[][] = [];
-
-  for (let index = 0; index < values.length; index += size) {
-    chunks.push(values.slice(index, index + size));
-  }
-
-  return chunks;
-}
 
 // Update a single station — used by round-robin cron
 export async function updateSingleStation(imei: string) {
@@ -91,7 +80,11 @@ export async function updateSingleStation(imei: string) {
     }
 
     // 4. Prepare lookup of present batteries
-    const presentIds = new Set(rawBatteries.map((b: any) => b.battery_id));
+    const presentIds = new Set(
+      rawBatteries
+        .map((b: any) => normalizeBatteryId(b.battery_id))
+        .filter(Boolean),
+    );
 
     // 5. Build initial slot map with empty entries
     const slotMap = new Map<string, any>();
@@ -114,7 +107,7 @@ export async function updateSingleStation(imei: string) {
       if (!b.slot_id || typeof b.slot_id !== "string") return;
       slotMap.set(b.slot_id, {
         slot_id: b.slot_id,
-        battery_id: b.battery_id,
+        battery_id: normalizeBatteryId(b.battery_id) || b.battery_id,
         level: parseInt(b.battery_capacity) || null,
         status: b.lock_status === "1" ? "Online" : "Offline",
         rented: false,
@@ -157,45 +150,8 @@ export async function updateSingleStation(imei: string) {
       }
     }
 
-    // 7. Auto-return any active rental whose battery is physically present
-    // in this station, even if that rental started at another station.
-    const presentBatteryIds = Array.from(presentIds).filter(Boolean);
-
-    for (const batteryIdChunk of chunkValues(
-      presentBatteryIds,
-      FIRESTORE_IN_QUERY_LIMIT,
-    )) {
-      const rentalsByBatterySnap = await db
-        .collection("rentals")
-        .where("battery_id", "in", batteryIdChunk)
-        .get();
-
-      for (const rentalDoc of rentalsByBatterySnap.docs) {
-        const rental = rentalDoc.data();
-
-        if (rental.status !== "rented") {
-          continue;
-        }
-
-        await rentalDoc.ref.update({
-          status: "returned",
-          returnedAt: now,
-          note:
-            rental.imei === imei
-              ? "Auto-returned: battery physically present"
-              : `Auto-returned: battery physically present at station ${imei}`,
-        });
-
-        console.error(
-          rental.imei === imei
-            ? `↩️ Auto-returned ${rental.battery_id}`
-            : `↩️ Auto-returned ${rental.battery_id} from rental station ${rental.imei} because it is present at station ${imei}`,
-        );
-      }
-    }
-
-    // 8. Fetch all active rentals after global auto-return pass so station
-    // counts and virtual cards can be built from the current Firestore truth.
+    // 7. Fetch all active rentals once, then auto-return any whose battery is
+    // physically present in a station using normalized battery IDs.
     const rentalsSnap = await db
       .collection("rentals")
       .where("status", "==", "rented")
@@ -213,9 +169,37 @@ export async function updateSingleStation(imei: string) {
       }),
     );
 
-    const rentalGroups = groupActiveRentalsByBattery(
-      allActiveRentals,
+    const autoReturnedRentalIds = new Set<string>();
+
+    for (const rental of allActiveRentals) {
+      const normalizedBatteryId = normalizeBatteryId(rental.battery_id);
+      if (!normalizedBatteryId || !presentIds.has(normalizedBatteryId)) {
+        continue;
+      }
+
+      await rental.doc.ref.update({
+        status: "returned",
+        returnedAt: now,
+        note:
+          rental.imei === imei
+            ? "Auto-returned: battery physically present"
+            : `Auto-returned: battery physically present at station ${imei}`,
+      });
+
+      autoReturnedRentalIds.add(rental.id);
+
+      console.error(
+        rental.imei === imei
+          ? `↩️ Auto-returned ${normalizedBatteryId}`
+          : `↩️ Auto-returned ${normalizedBatteryId} from rental station ${rental.imei} because it is present at station ${imei}`,
+      );
+    }
+
+    const openActiveRentals = allActiveRentals.filter(
+      (rental) => !autoReturnedRentalIds.has(rental.id),
     );
+
+    const rentalGroups = groupActiveRentalsByBattery(openActiveRentals);
 
     // 10. Build valid rentals list for batteries still out in the field
     const validRentals: { doc: any; data: any }[] = [];
@@ -233,7 +217,7 @@ export async function updateSingleStation(imei: string) {
 
     // 11. Assign each valid rental to first available virtual slot
     for (const { data: r } of validRentals) {
-      const { battery_id, amount, timestamp, phoneNumber } = r;
+      const { amount, timestamp, phoneNumber } = r;
 
       let assignedSlot: string | null = null;
       for (let slot = 1; slot <= MACHINE_CAPACITY; slot++) {
@@ -259,7 +243,7 @@ export async function updateSingleStation(imei: string) {
 
       slotMap.set(assignedSlot, {
         slot_id: assignedSlot,
-        battery_id,
+        battery_id: normalizeBatteryId(r.battery_id) || r.battery_id,
         level: null,
         status: isOverdue ? "Overdue" : "Rented",
         rented: true,
