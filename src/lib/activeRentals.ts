@@ -35,9 +35,8 @@ function normalizePhoneDigits(value: any): string {
 
 export function getTrustedRentalPhone(value: any): string {
   return String(
-    value?.waafiAccountNo ||
+    value?.requestedPhoneNumber ||
     value?.waafiConfirmedPhoneNumber ||
-      value?.requestedPhoneNumber ||
       value?.phoneNumber ||
       "",
   );
@@ -45,9 +44,15 @@ export function getTrustedRentalPhone(value: any): string {
 
 export function hasRentalPhoneMismatch(value: any): boolean {
   const requestedPhone = normalizePhoneDigits(value?.requestedPhoneNumber);
-  const trustedPhone = normalizePhoneDigits(getTrustedRentalPhone(value));
+  const waafiConfirmedPhone = normalizePhoneDigits(
+    value?.waafiConfirmedPhoneNumber,
+  );
 
-  return Boolean(requestedPhone && trustedPhone && requestedPhone !== trustedPhone);
+  return Boolean(
+    requestedPhone &&
+      waafiConfirmedPhone &&
+      requestedPhone !== waafiConfirmedPhone,
+  );
 }
 
 export function compareRentalPriorityDesc(a: any, b: any): number {

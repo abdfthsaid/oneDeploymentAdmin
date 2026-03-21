@@ -689,10 +689,12 @@ export default function TransactionsPage() {
                             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                               <div>
                                 <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                  Requested Phone
+                                  Requested Phone (Immutable)
                                 </div>
                                 <div className="mt-1 text-sm dark:text-white">
-                                  {formatPhoneNumber(tx.phoneNumber)}
+                                  {formatPhoneNumber(
+                                    tx.requestedPhoneNumber || tx.phoneNumber,
+                                  )}
                                 </div>
                               </div>
                               <div>
