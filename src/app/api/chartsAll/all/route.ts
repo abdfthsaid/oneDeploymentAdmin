@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
+import { getTrustedRentalPhone } from "@/lib/activeRentals";
 import { applyRevenueCuts } from "@/lib/timeUtils";
 import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
 import { RENTALS_COLLECTION } from "@/lib/rentalsCollection";
@@ -58,7 +59,8 @@ export async function GET(req: NextRequest) {
 
         rentalsSnapshot.forEach((doc: any) => {
           const data = doc.data();
-          const { timestamp, amount, phoneNumber } = data;
+          const { timestamp, amount } = data;
+          const phoneNumber = getTrustedRentalPhone(data);
           if (!timestamp || !amount || !phoneNumber) return;
 
           const date = timestamp.toDate();

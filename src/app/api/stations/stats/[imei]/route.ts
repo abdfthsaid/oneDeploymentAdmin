@@ -5,6 +5,8 @@ import {
   ActiveRentalRow,
   groupActiveRentalsByBattery,
   getRentalTimestampMillis,
+  getTrustedRentalPhone,
+  hasRentalPhoneMismatch,
 } from '@/lib/activeRentals';
 import { normalizeBatteryId } from '@/lib/batteryId';
 import { RENTALS_COLLECTION } from '@/lib/rentalsCollection';
@@ -66,7 +68,12 @@ function buildLiveStationView(station: any, rentalGroups: any[]) {
 
     const activeRentals = group.rentals.map((entry: any) => ({
       id: entry.id || null,
-      phoneNumber: entry.phoneNumber || '',
+      requestedPhoneNumber: entry.requestedPhoneNumber || '',
+      waafiConfirmedPhoneNumber: entry.waafiConfirmedPhoneNumber || '',
+      storedPhoneNumber: entry.phoneNumber || '',
+      phoneNumber: getTrustedRentalPhone(entry),
+      phoneNumberMismatch: hasRentalPhoneMismatch(entry),
+      phoneAuthority: entry.phoneAuthority || null,
       rentedAt: entry.timestamp || null,
       amount: entry.amount || 0,
       imei: entry.imei || null,
@@ -86,7 +93,12 @@ function buildLiveStationView(station: any, rentalGroups: any[]) {
       level: null,
       status: isOverdue ? 'Overdue' : 'Rented',
       rented: true,
-      phoneNumber: rental.phoneNumber || '',
+      requestedPhoneNumber: rental.requestedPhoneNumber || '',
+      waafiConfirmedPhoneNumber: rental.waafiConfirmedPhoneNumber || '',
+      storedPhoneNumber: rental.phoneNumber || '',
+      phoneNumber: getTrustedRentalPhone(rental),
+      phoneNumberMismatch: hasRentalPhoneMismatch(rental),
+      phoneAuthority: rental.phoneAuthority || null,
       rentedAt: rental.timestamp || null,
       amount: rental.amount || 0,
       rentalId: rental.id || null,

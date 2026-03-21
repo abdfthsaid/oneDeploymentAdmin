@@ -1,7 +1,11 @@
 import { admin } from "./firebase-admin";
 import db from "./firebase-admin";
 import axios from "axios";
-import { ActiveRentalRow, groupActiveRentalsByBattery } from "./activeRentals";
+import {
+  ActiveRentalRow,
+  getTrustedRentalPhone,
+  groupActiveRentalsByBattery,
+} from "./activeRentals";
 import { normalizeBatteryId } from "./batteryId";
 import { cacheComponent } from "./cacheComponent";
 import { RENTALS_COLLECTION } from "./rentalsCollection";
@@ -218,7 +222,8 @@ export async function updateSingleStation(imei: string) {
 
     // 11. Assign each valid rental to first available virtual slot
     for (const { data: r } of validRentals) {
-      const { amount, timestamp, phoneNumber } = r;
+      const { amount, timestamp } = r;
+      const trustedPhoneNumber = getTrustedRentalPhone(r);
 
       let assignedSlot: string | null = null;
       for (let slot = 1; slot <= MACHINE_CAPACITY; slot++) {
@@ -248,7 +253,7 @@ export async function updateSingleStation(imei: string) {
         level: null,
         status: isOverdue ? "Overdue" : "Rented",
         rented: true,
-        phoneNumber: phoneNumber || "",
+        phoneNumber: trustedPhoneNumber || "",
         rentedAt: timestamp,
         amount: amount || 0,
       });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import db from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
+import { getTrustedRentalPhone, hasRentalPhoneMismatch } from "@/lib/activeRentals";
 import { normalizeBatteryId } from "@/lib/batteryId";
 import {
   buildPrivateCacheControl,
@@ -135,6 +136,12 @@ export async function GET(req: NextRequest) {
 
       const enrichedRentals = rentals.map((r: any) => ({
         ...r,
+        waafiConfirmedPhoneNumber: r.waafiConfirmedPhoneNumber || "",
+        requestedPhoneNumber: r.requestedPhoneNumber || "",
+        storedPhoneNumber: r.phoneNumber || "",
+        phoneNumber: getTrustedRentalPhone(r),
+        phoneNumberMismatch: hasRentalPhoneMismatch(r),
+        phoneAuthority: r.phoneAuthority || null,
         stationName:
           stationMap[r.imei] ||
           stationMap[r.stationCode] ||
@@ -149,7 +156,10 @@ export async function GET(req: NextRequest) {
 
       return enrichedRentals.filter((r: any) => {
         const normalizedStatus = String(r.status || "").toLowerCase();
-        const normalizedPhone = String(r.phoneNumber || "").replace(/\D/g, "");
+        const normalizedPhone = String(getTrustedRentalPhone(r) || "").replace(
+          /\D/g,
+          "",
+        );
         const normalizedBattery = normalizeBatteryId(r.battery_id);
         const timestampMs = getTimestampMillis(r.timestamp);
         const normalizedStationText = [

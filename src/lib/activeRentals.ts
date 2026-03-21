@@ -2,7 +2,9 @@ import { normalizeBatteryId } from "./batteryId";
 
 export type ActiveRentalRow = {
   id: string;
+  waafiConfirmedPhoneNumber?: string;
   battery_id?: string;
+  requestedPhoneNumber?: string;
   phoneNumber?: string;
   timestamp?: any;
   imei?: string;
@@ -25,6 +27,26 @@ export function getRentalTimestampMillis(value: any): number {
 
 function getSortableRentalId(value: any): string {
   return String(value?.id || "");
+}
+
+function normalizePhoneDigits(value: any): string {
+  return String(value || "").replace(/\D/g, "");
+}
+
+export function getTrustedRentalPhone(value: any): string {
+  return String(
+    value?.waafiConfirmedPhoneNumber ||
+      value?.requestedPhoneNumber ||
+      value?.phoneNumber ||
+      "",
+  );
+}
+
+export function hasRentalPhoneMismatch(value: any): boolean {
+  const requestedPhone = normalizePhoneDigits(value?.requestedPhoneNumber);
+  const trustedPhone = normalizePhoneDigits(getTrustedRentalPhone(value));
+
+  return Boolean(requestedPhone && trustedPhone && requestedPhone !== trustedPhone);
 }
 
 export function compareRentalPriorityDesc(a: any, b: any): number {

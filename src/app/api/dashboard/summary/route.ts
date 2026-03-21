@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { admin } from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
+import { getTrustedRentalPhone } from "@/lib/activeRentals";
 import {
   calculateUniqueRevenue,
   getDayBoundsUTC3,
@@ -22,7 +23,8 @@ function countFromSnapshot(snap: any) {
     const txId = data.transactionId || doc.id;
     if (uniqueTransactions.has(txId)) return;
     uniqueTransactions.add(txId);
-    if (data.phoneNumber) uniqueCustomers.add(data.phoneNumber);
+    const trustedPhone = getTrustedRentalPhone(data);
+    if (trustedPhone) uniqueCustomers.add(trustedPhone);
     if (data.imei) stationSet.add(data.imei);
   });
 

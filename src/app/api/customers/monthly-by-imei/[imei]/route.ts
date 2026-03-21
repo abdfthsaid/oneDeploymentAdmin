@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { admin } from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
+import { getTrustedRentalPhone } from "@/lib/activeRentals";
 import { getMonthBoundsUTC3 } from "@/lib/timeUtils";
 import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
 import { RENTALS_COLLECTION } from "@/lib/rentalsCollection";
@@ -40,7 +41,7 @@ export async function GET(
 
         const phones = new Set<string>();
         snapshot.forEach((doc: any) => {
-          const num = doc.data().phoneNumber;
+          const num = getTrustedRentalPhone(doc.data());
           if (num) phones.add(num);
         });
 

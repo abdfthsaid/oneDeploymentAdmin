@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
+import { getTrustedRentalPhone } from "@/lib/activeRentals";
 import { applyRevenueCuts } from "@/lib/timeUtils";
 import { imeiToStationCode } from "@/lib/imeiMap";
 import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
@@ -99,7 +100,7 @@ export async function GET(
 
           const rawAmt = parseFloat(r.amount) || 0;
           const amt = rawAmt > 0 ? applyRevenueCuts(rawAmt) : 0;
-          const phone = r.phoneNumber || "";
+          const phone = getTrustedRentalPhone(r);
 
           dailyRev[day] = (dailyRev[day] || 0) + amt;
           weeklyRev[week] = (weeklyRev[week] || 0) + amt;
