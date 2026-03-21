@@ -7,6 +7,7 @@ import {
 } from "./activeRentals";
 import { normalizeBatteryId } from "./batteryId";
 import db from "./firebase-admin";
+import { RENTALS_COLLECTION } from "./rentalsCollection";
 
 export const BATTERY_STATE_COLLECTION = "battery_state";
 
@@ -78,6 +79,50 @@ function mergeCanonicalStateIntoRental(
 
 function shouldReplaceState(existing: any, rental: ActiveRentalRow) {
   return String(existing?.activeRentalId || "") !== String(rental.id || "");
+}
+
+function shouldRepairOfficialRental(
+  existing: Record<string, any> | null | undefined,
+  rental: ActiveRentalRow,
+) {
+  if (!existing || String(existing.activeRentalId || "") !== String(rental.id || "")) {
+    return false;
+  }
+
+  return (
+    String(existing.phoneNumber || "") !== String(rental.phoneNumber || "") ||
+    String(existing.requestedPhoneNumber || "") !==
+      String(rental.requestedPhoneNumber || rental.phoneNumber || "") ||
+    String(existing.phoneAuthority || "") !== String(rental.phoneAuthority || "") ||
+    String(existing.imei || "") !== String(rental.imei || "") ||
+    String(existing.stationCode || "") !== String(rental.stationCode || "") ||
+    String(existing.slot_id || "") !== String(rental.slot_id || "") ||
+    String(existing.transactionId || "") !== String(rental.transactionId || "") ||
+    String(existing.issuerTransactionId || "") !==
+      String(rental.issuerTransactionId || "") ||
+    String(existing.referenceId || "") !== String(rental.referenceId || "") ||
+    String(existing.waafiAccountNo || "") !== String(rental.waafiAccountNo || "") ||
+    String(existing.waafiConfirmedPhoneNumber || "") !==
+      String(rental.waafiConfirmedPhoneNumber || "")
+  );
+}
+
+function buildCanonicalRentalRepairPatch(existing: Record<string, any>) {
+  return {
+    battery_id: String(existing.battery_id || ""),
+    imei: existing.imei || null,
+    stationCode: existing.stationCode || null,
+    slot_id: existing.slot_id || null,
+    phoneNumber: existing.phoneNumber || "",
+    requestedPhoneNumber: existing.requestedPhoneNumber || existing.phoneNumber || "",
+    phoneAuthority: existing.phoneAuthority || null,
+    transactionId: existing.transactionId || null,
+    issuerTransactionId: existing.issuerTransactionId || null,
+    referenceId: existing.referenceId || null,
+    amount: typeof existing.amount === "number" ? existing.amount : 0,
+    waafiAccountNo: existing.waafiAccountNo || null,
+    waafiConfirmedPhoneNumber: existing.waafiConfirmedPhoneNumber || null,
+  };
 }
 
 export async function synchronizeBatteryStateFromActiveRentals(
@@ -163,6 +208,17 @@ export async function synchronizeBatteryStateFromActiveRentals(
         existing?.ref ||
         db.collection(BATTERY_STATE_COLLECTION).doc(group.batteryId);
       batch.set(ref, payload, { merge: true });
+      hasWrites = true;
+    } else if (shouldRepairOfficialRental(existing.data, officialRental)) {
+      const rentalRef = db.collection(RENTALS_COLLECTION).doc(String(officialRental.id || ""));
+      batch.set(
+        rentalRef,
+        {
+          ...buildCanonicalRentalRepairPatch(existing.data),
+          canonicalSyncedAt: now,
+        },
+        { merge: true },
+      );
       hasWrites = true;
     }
   }
