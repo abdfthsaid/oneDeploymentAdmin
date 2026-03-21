@@ -35,6 +35,7 @@ function normalizePhoneDigits(value: any): string {
 
 export function getTrustedRentalPhone(value: any): string {
   return String(
+    value?.waafiAccountNo ||
     value?.waafiConfirmedPhoneNumber ||
       value?.requestedPhoneNumber ||
       value?.phoneNumber ||
