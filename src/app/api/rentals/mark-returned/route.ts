@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
+import { clearBatteryStateIfCurrent } from "@/lib/batteryState";
 import { cacheComponent } from "@/lib/cacheComponent";
+import { normalizeBatteryId } from "@/lib/batteryId";
 import db from "@/lib/firebase-admin";
 import { RENTALS_COLLECTION } from "@/lib/rentalsCollection";
 
@@ -38,14 +40,35 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
-    await rentalRef.update({
-      status: "returned",
-      returnedAt: new Date(),
-      note:
-        typeof note === "string" && note.trim()
-          ? note.trim()
-          : `Manually marked returned by admin ${user.username}`,
-      returnedBy: user.username,
+    const normalizedBatteryId = normalizeBatteryId(String(rental.battery_id || ""));
+    const returnNote =
+      typeof note === "string" && note.trim()
+        ? note.trim()
+        : `Manually marked returned by admin ${user.username}`;
+    const rentedRowsSnap = await db
+      .collection(RENTALS_COLLECTION)
+      .where("status", "==", "rented")
+      .get();
+
+    const matchingRows = rentedRowsSnap.docs.filter((doc) => {
+      const data = doc.data() || {};
+      return normalizeBatteryId(String(data.battery_id || "")) === normalizedBatteryId;
+    });
+
+    for (const row of matchingRows) {
+      await row.ref.update({
+        status: "returned",
+        returnedAt: new Date(),
+        note: returnNote,
+        returnedBy: user.username,
+      });
+    }
+
+    await clearBatteryStateIfCurrent({
+      batteryId: normalizedBatteryId,
+      rentalId: id,
+      note: returnNote,
+      force: true,
     });
 
     cacheComponent.invalidatePrefix("stations:stats:");

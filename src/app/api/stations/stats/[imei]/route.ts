@@ -8,6 +8,7 @@ import {
   getTrustedRentalPhone,
   hasRentalPhoneMismatch,
 } from '@/lib/activeRentals';
+import { synchronizeBatteryStateFromActiveRentals } from '@/lib/batteryState';
 import { normalizeBatteryId } from '@/lib/batteryId';
 import { RENTALS_COLLECTION } from '@/lib/rentalsCollection';
 import { updateSingleStation } from '@/lib/stationStatsJob';
@@ -158,7 +159,9 @@ export async function GET(req: NextRequest, { params }: { params: { imei: string
         }),
       );
 
-      const rentalGroups = groupActiveRentalsByBattery(activeRentals);
+      const officialActiveRentals =
+        await synchronizeBatteryStateFromActiveRentals(activeRentals);
+      const rentalGroups = groupActiveRentalsByBattery(officialActiveRentals);
 
       const station = buildLiveStationView(
         doc.data(),

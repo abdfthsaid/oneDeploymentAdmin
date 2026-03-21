@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { admin } from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
+import { getTrustedRentalPhone, hasRentalPhoneMismatch } from "@/lib/activeRentals";
+import { synchronizeBatteryStateFromActiveRentals } from "@/lib/batteryState";
 import { cacheComponent, buildPrivateCacheControl } from "@/lib/cacheComponent";
 import { RENTALS_COLLECTION } from "@/lib/rentalsCollection";
 
@@ -32,7 +34,7 @@ export async function GET(req: NextRequest) {
           .where("status", "in", ["rented", "returned"])
           .where("timestamp", ">=", twoDaysAgo)
           .orderBy("timestamp", "desc")
-          .limit(10)
+          .limit(30)
           .get();
 
         const rentals = rentalsSnapshot.docs.map((doc) => ({
@@ -57,10 +59,31 @@ export async function GET(req: NextRequest) {
           stationMap[data.imei] = data.name || null;
         });
 
-        return rentals.map((r: any) => ({
+        const enriched = rentals.map((r: any) => ({
           ...r,
+          phoneNumber: getTrustedRentalPhone(r),
+          phoneNumberMismatch: hasRentalPhoneMismatch(r),
           stationName: stationMap[r.imei] || null,
         }));
+
+        const activeRows = enriched.filter((r: any) => {
+          const normalizedStatus = String(r.status || "").toLowerCase();
+          return normalizedStatus !== "returned" && normalizedStatus !== "completed";
+        });
+        const returnedRows = enriched.filter((r: any) => {
+          const normalizedStatus = String(r.status || "").toLowerCase();
+          return normalizedStatus === "returned" || normalizedStatus === "completed";
+        });
+        const officialActiveRows =
+          await synchronizeBatteryStateFromActiveRentals(activeRows);
+
+        return [...officialActiveRows, ...returnedRows]
+          .sort((a: any, b: any) => {
+            const aSeconds = Number(a?.timestamp?._seconds || 0);
+            const bSeconds = Number(b?.timestamp?._seconds || 0);
+            return bSeconds - aSeconds;
+          })
+          .slice(0, 10);
       },
     );
 

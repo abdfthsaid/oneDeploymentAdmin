@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
 import { getTrustedRentalPhone, hasRentalPhoneMismatch } from "@/lib/activeRentals";
+import { synchronizeBatteryStateFromActiveRentals } from "@/lib/batteryState";
 import { normalizeBatteryId } from "@/lib/batteryId";
 import {
   buildPrivateCacheControl,
@@ -150,11 +151,26 @@ export async function GET(req: NextRequest) {
           null,
       }));
 
+      const officialActiveRentals =
+        statusFilter === "rented"
+          ? await synchronizeBatteryStateFromActiveRentals(
+              enrichedRentals.filter((r: any) => {
+                const normalizedStatus = String(r.status || "").toLowerCase();
+                return (
+                  normalizedStatus !== "returned" &&
+                  normalizedStatus !== "completed"
+                );
+              }),
+            )
+          : [];
+      const sourceRentals =
+        statusFilter === "rented" ? officialActiveRentals : enrichedRentals;
+
       if (!filteredSearch) {
-        return enrichedRentals;
+        return sourceRentals;
       }
 
-      return enrichedRentals.filter((r: any) => {
+      return sourceRentals.filter((r: any) => {
         const normalizedStatus = String(r.status || "").toLowerCase();
         const normalizedPhone = String(getTrustedRentalPhone(r) || "").replace(
           /\D/g,

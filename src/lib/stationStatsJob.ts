@@ -4,8 +4,11 @@ import axios from "axios";
 import {
   ActiveRentalRow,
   getTrustedRentalPhone,
-  groupActiveRentalsByBattery,
 } from "./activeRentals";
+import {
+  clearBatteryStateIfCurrent,
+  synchronizeBatteryStateFromActiveRentals,
+} from "./batteryState";
 import { normalizeBatteryId } from "./batteryId";
 import { cacheComponent } from "./cacheComponent";
 import { RENTALS_COLLECTION } from "./rentalsCollection";
@@ -186,23 +189,42 @@ export async function updateSingleStation(imei: string) {
     );
 
     const autoReturnedRentalIds = new Set<string>();
+    const returnedBatteryIds = new Set<string>();
 
     for (const rental of allActiveRentals) {
       const normalizedBatteryId = normalizeBatteryId(rental.battery_id);
-      if (!normalizedBatteryId || !presentIds.has(normalizedBatteryId)) {
+      if (
+        !normalizedBatteryId ||
+        !presentIds.has(normalizedBatteryId) ||
+        returnedBatteryIds.has(normalizedBatteryId)
+      ) {
         continue;
       }
 
-      await rental.doc.ref.update({
-        status: "returned",
-        returnedAt: now,
-        note:
-          rental.imei === imei
-            ? "Auto-returned: battery physically present"
-            : `Auto-returned: battery physically present at station ${imei}`,
-      });
+      const matchingRentals = allActiveRentals.filter(
+        (row) => normalizeBatteryId(row.battery_id) === normalizedBatteryId,
+      );
+      const returnNote =
+        rental.imei === imei
+          ? "Auto-returned: battery physically present"
+          : `Auto-returned: battery physically present at station ${imei}`;
 
-      autoReturnedRentalIds.add(rental.id);
+      for (const matchingRental of matchingRentals) {
+        await matchingRental.doc.ref.update({
+          status: "returned",
+          returnedAt: now,
+          note: returnNote,
+        });
+        autoReturnedRentalIds.add(matchingRental.id);
+      }
+
+      await clearBatteryStateIfCurrent({
+        batteryId: normalizedBatteryId,
+        rentalId: rental.id,
+        note: returnNote,
+        force: true,
+      });
+      returnedBatteryIds.add(normalizedBatteryId);
 
       console.error(
         rental.imei === imei
@@ -215,24 +237,12 @@ export async function updateSingleStation(imei: string) {
       (rental) => !autoReturnedRentalIds.has(rental.id),
     );
 
-    const rentalGroups = groupActiveRentalsByBattery(openActiveRentals);
-
-    // 10. Build valid rentals list for batteries still out in the field
-    const validRentals: { doc: any; data: any }[] = [];
-
-    for (const group of rentalGroups) {
-      if (group.primary.imei !== imei) {
-        continue;
-      }
-
-      validRentals.push({
-        doc: group.primary.doc,
-        data: group.primary,
-      });
-    }
+    const officialActiveRentals =
+      await synchronizeBatteryStateFromActiveRentals(openActiveRentals);
+    const validRentals = officialActiveRentals.filter((rental) => rental.imei === imei);
 
     // 11. Assign each valid rental to first available virtual slot
-    for (const { data: r } of validRentals) {
+    for (const r of validRentals) {
       const { amount, timestamp } = r;
       const trustedPhoneNumber = getTrustedRentalPhone(r);
 
