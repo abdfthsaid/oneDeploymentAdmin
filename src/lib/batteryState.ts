@@ -251,7 +251,7 @@ export async function synchronizeBatteryStateFromActiveRentals(
   let hasWrites = false;
   const officialRentals: ActiveRentalRow[] = [];
 
-  for (const [batteryId, existing] of existingStateByBattery.entries()) {
+  for (const [batteryId, existing] of Array.from(existingStateByBattery.entries())) {
     if (groupsByBattery.has(batteryId)) {
       continue;
     }
