@@ -11,6 +11,7 @@ import { cacheComponent } from "./cacheComponent";
 import { RENTALS_COLLECTION } from "./rentalsCollection";
 
 const MACHINE_CAPACITY = 8;
+const MIN_RENTABLE_BATTERY_PERCENT = 60;
 const ALL_STATIONS = [
   "WSEP161721195358",
   "WSEP161741066504",
@@ -110,11 +111,21 @@ export async function updateSingleStation(imei: string) {
     // 6. Overlay HeyCharge data (live batteries)
     rawBatteries.forEach((b: any) => {
       if (!b.slot_id || typeof b.slot_id !== "string") return;
+      const batteryLevel = parseInt(b.battery_capacity) || null;
+      const isOnline = b.lock_status === "1";
+      const isHealthy =
+        b.battery_abnormal === "0" && b.cable_abnormal === "0";
+      const isLowBattery =
+        isOnline &&
+        isHealthy &&
+        batteryLevel !== null &&
+        batteryLevel < MIN_RENTABLE_BATTERY_PERCENT;
+
       slotMap.set(b.slot_id, {
         slot_id: b.slot_id,
         battery_id: normalizeBatteryId(b.battery_id) || b.battery_id,
-        level: parseInt(b.battery_capacity) || null,
-        status: b.lock_status === "1" ? "Online" : "Offline",
+        level: batteryLevel,
+        status: isLowBattery ? "Low Battery" : isOnline ? "Online" : "Offline",
         rented: false,
         phoneNumber: "",
         rentedAt: null,

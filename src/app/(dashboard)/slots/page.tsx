@@ -67,11 +67,13 @@ const getStatusInfo = (slot: any) => {
   const status = slot.status?.toLowerCase();
   const isMissing = status === "empty";
   const isOverdue = status === "overdue";
+  const isLowBattery = status === "low battery";
   const isOccupied = !isOverdue && (status === "rented" || slot.rented);
   const isAvailable = status === "online" && !slot.rented;
 
   let statusText = "Unknown";
   if (isAvailable) statusText = "Available";
+  if (isLowBattery) statusText = "Low Battery";
   if (isOccupied) statusText = "Occupied";
   if (isOverdue) statusText = "Overdue";
   if (isMissing) statusText = "Missing";
@@ -79,6 +81,8 @@ const getStatusInfo = (slot: any) => {
   const badgeClass = `px-2 py-1 text-xs font-semibold rounded-full border ${
     isAvailable
       ? "text-green-700 bg-green-100 border-green-400"
+      : isLowBattery
+        ? "text-amber-700 bg-amber-100 border-amber-400"
       : isOverdue
         ? "text-red-700 bg-red-100 border-red-400"
         : isOccupied
@@ -89,6 +93,8 @@ const getStatusInfo = (slot: any) => {
   const buttonClass = `w-full py-2 font-semibold rounded-lg flex justify-center items-center gap-2 transition ${
     isAvailable
       ? "bg-green-600 text-white hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
+      : isLowBattery
+        ? "bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700"
       : isOverdue
         ? "bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
         : isOccupied
@@ -98,6 +104,8 @@ const getStatusInfo = (slot: any) => {
 
   const borderClass = isAvailable
     ? "border-green-400"
+    : isLowBattery
+      ? "border-amber-400"
     : isOverdue
       ? "border-red-400"
       : isOccupied
@@ -106,6 +114,8 @@ const getStatusInfo = (slot: any) => {
 
   const icon = isAvailable
     ? faLock
+    : isLowBattery
+      ? faBatteryFull
     : isOverdue
       ? faExclamationTriangle
       : isOccupied
@@ -152,10 +162,15 @@ function SlotCard({ slot }: { slot: any }) {
           {statusText === "Available" && (
             <FontAwesomeIcon icon={faCheckCircle} className="text-green-500" />
           )}
+          {statusText === "Low Battery" && (
+            <FontAwesomeIcon icon={faBatteryFull} className="text-amber-500" />
+          )}
           {statusText === "Occupied" && (
             <FontAwesomeIcon icon={faLock} className="text-blue-500" />
           )}
-          {statusText !== "Available" && statusText !== "Occupied" && (
+          {statusText !== "Available" &&
+            statusText !== "Occupied" &&
+            statusText !== "Low Battery" && (
             <FontAwesomeIcon
               icon={faExclamationTriangle}
               className="text-red-500"
@@ -194,6 +209,11 @@ function SlotCard({ slot }: { slot: any }) {
 
       <div className="mb-2 text-xs text-gray-500 dark:text-gray-400">
         Status: {statusText}
+        {statusText === "Low Battery" && (
+          <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-amber-800 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+            Below 60%, blocked for new rentals
+          </div>
+        )}
         {(statusText === "Occupied" ||
           statusText === "Overdue" ||
           statusText === "Missing") &&
