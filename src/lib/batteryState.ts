@@ -40,15 +40,44 @@ function buildStatePayload(
   };
 }
 
-function shouldUpdateState(existing: any, rental: ActiveRentalRow) {
-  return (
-    String(existing?.activeRentalId || "") !== String(rental.id || "") ||
-    String(existing?.phoneNumber || "") !== String(rental.phoneNumber || "") ||
-    String(existing?.requestedPhoneNumber || "") !==
-      String(rental.requestedPhoneNumber || rental.phoneNumber || "") ||
-    String(existing?.imei || "") !== String(rental.imei || "") ||
-    String(existing?.slot_id || "") !== String(rental.slot_id || "")
-  );
+function mergeCanonicalStateIntoRental(
+  rental: ActiveRentalRow,
+  existing: Record<string, any> | null | undefined,
+): ActiveRentalRow {
+  if (!existing) {
+    return rental;
+  }
+
+  return {
+    ...rental,
+    imei: existing.imei || rental.imei || null,
+    stationCode: existing.stationCode || rental.stationCode || null,
+    slot_id: existing.slot_id || rental.slot_id || null,
+    phoneNumber: existing.phoneNumber || rental.phoneNumber || "",
+    requestedPhoneNumber:
+      existing.requestedPhoneNumber ||
+      rental.requestedPhoneNumber ||
+      rental.phoneNumber ||
+      "",
+    phoneAuthority: existing.phoneAuthority || rental.phoneAuthority || null,
+    transactionId: existing.transactionId || rental.transactionId || null,
+    issuerTransactionId:
+      existing.issuerTransactionId || rental.issuerTransactionId || null,
+    referenceId: existing.referenceId || rental.referenceId || null,
+    amount:
+      typeof existing.amount === "number"
+        ? existing.amount
+        : rental.amount || 0,
+    waafiAccountNo: existing.waafiAccountNo || rental.waafiAccountNo || null,
+    waafiConfirmedPhoneNumber:
+      existing.waafiConfirmedPhoneNumber ||
+      rental.waafiConfirmedPhoneNumber ||
+      null,
+  };
+}
+
+function shouldReplaceState(existing: any, rental: ActiveRentalRow) {
+  return String(existing?.activeRentalId || "") !== String(rental.id || "");
 }
 
 export async function synchronizeBatteryStateFromActiveRentals(
@@ -120,9 +149,14 @@ export async function synchronizeBatteryStateFromActiveRentals(
       [...group.rentals].sort(compareRentalPriorityDesc)[0] ||
       group.primary;
 
-    officialRentals.push(officialRental);
+    const canonicalRental =
+      existing && existingRentalId === String(officialRental.id || "")
+        ? mergeCanonicalStateIntoRental(officialRental, existing.data)
+        : officialRental;
 
-    if (!existing || shouldUpdateState(existing.data, officialRental)) {
+    officialRentals.push(canonicalRental);
+
+    if (!existing || shouldReplaceState(existing.data, officialRental)) {
       const claimedAt = existing?.data.claimedAt || officialRental.timestamp || now;
       const payload = buildStatePayload(officialRental, claimedAt, now);
       const ref =
