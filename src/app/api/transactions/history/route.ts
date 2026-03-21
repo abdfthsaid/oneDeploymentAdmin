@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
 import { getTrustedRentalPhone, hasRentalPhoneMismatch } from "@/lib/activeRentals";
-import { synchronizeBatteryStateFromActiveRentals } from "@/lib/batteryState";
+import { loadOfficialActiveRentals } from "@/lib/batteryState";
 import { normalizeBatteryId } from "@/lib/batteryId";
 import {
   buildPrivateCacheControl,
@@ -118,7 +118,9 @@ export async function GET(req: NextRequest) {
         ...doc.data(),
       }));
 
-      if (rentals.length === 0) {
+      const officialActiveRentals = await loadOfficialActiveRentals();
+
+      if (rentals.length === 0 && officialActiveRentals.length === 0) {
         return [];
       }
 
@@ -151,20 +153,38 @@ export async function GET(req: NextRequest) {
           null,
       }));
 
-      const officialActiveRentals =
-        statusFilter === "rented"
-          ? await synchronizeBatteryStateFromActiveRentals(
-              enrichedRentals.filter((r: any) => {
-                const normalizedStatus = String(r.status || "").toLowerCase();
-                return (
-                  normalizedStatus !== "returned" &&
-                  normalizedStatus !== "completed"
-                );
-              }),
-            )
-          : [];
+      const enrichedOfficialActiveRentals = officialActiveRentals.map((r: any) => ({
+        ...r,
+        waafiConfirmedPhoneNumber: r.waafiConfirmedPhoneNumber || "",
+        requestedPhoneNumber: r.requestedPhoneNumber || "",
+        storedPhoneNumber: r.phoneNumber || "",
+        phoneNumber: getTrustedRentalPhone(r),
+        phoneNumberMismatch: hasRentalPhoneMismatch(r),
+        phoneAuthority: r.phoneAuthority || null,
+        stationName:
+          stationMap[r.imei] ||
+          stationMap[r.stationCode] ||
+          r.stationCode ||
+          r.imei ||
+          null,
+      }));
+      const officialById = new Map(
+        enrichedOfficialActiveRentals.map((row: any) => [String(row.id || ""), row]),
+      );
       const sourceRentals =
-        statusFilter === "rented" ? officialActiveRentals : enrichedRentals;
+        statusFilter === "rented"
+          ? enrichedOfficialActiveRentals
+          : enrichedRentals.map((row: any) => {
+              const normalizedStatus = String(row.status || "").toLowerCase();
+              if (
+                normalizedStatus !== "returned" &&
+                normalizedStatus !== "completed" &&
+                officialById.has(String(row.id || ""))
+              ) {
+                return officialById.get(String(row.id || ""))!;
+              }
+              return row;
+            });
 
       if (!filteredSearch) {
         return sourceRentals;

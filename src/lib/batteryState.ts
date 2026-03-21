@@ -125,6 +125,105 @@ function buildCanonicalRentalRepairPatch(existing: Record<string, any>) {
   };
 }
 
+function mergeStateWithRentalDoc(
+  stateDocId: string,
+  state: Record<string, any>,
+  rental: Record<string, any> | null | undefined,
+): ActiveRentalRow {
+  const activeRentalId = String(state.activeRentalId || "");
+  const rentalData = rental || {};
+
+  return {
+    id: activeRentalId || stateDocId,
+    batteryStateId: stateDocId,
+    ...rentalData,
+    battery_id: state.battery_id || rentalData.battery_id || stateDocId,
+    imei: state.imei || rentalData.imei || null,
+    stationCode: state.stationCode || rentalData.stationCode || null,
+    slot_id: state.slot_id || rentalData.slot_id || null,
+    phoneNumber: state.phoneNumber || rentalData.phoneNumber || "",
+    requestedPhoneNumber:
+      state.requestedPhoneNumber ||
+      rentalData.requestedPhoneNumber ||
+      state.phoneNumber ||
+      rentalData.phoneNumber ||
+      "",
+    phoneAuthority: state.phoneAuthority || rentalData.phoneAuthority || null,
+    transactionId: state.transactionId || rentalData.transactionId || null,
+    issuerTransactionId:
+      state.issuerTransactionId || rentalData.issuerTransactionId || null,
+    referenceId: state.referenceId || rentalData.referenceId || null,
+    amount:
+      typeof state.amount === "number"
+        ? state.amount
+        : typeof rentalData.amount === "number"
+          ? rentalData.amount
+          : 0,
+    status: "rented",
+    timestamp: rentalData.timestamp || state.claimedAt || state.updatedAt || null,
+    claimedAt: state.claimedAt || null,
+    updatedAt: state.updatedAt || null,
+    waafiAccountNo: state.waafiAccountNo || rentalData.waafiAccountNo || null,
+    waafiConfirmedPhoneNumber:
+      state.waafiConfirmedPhoneNumber ||
+      rentalData.waafiConfirmedPhoneNumber ||
+      null,
+    unlockStatus: rentalData.unlockStatus || null,
+    unlockUpdatedAt: rentalData.unlockUpdatedAt || null,
+    waafiState: rentalData.waafiState || null,
+    waafiResponseCode: rentalData.waafiResponseCode || null,
+    waafiErrorCode: rentalData.waafiErrorCode || null,
+    waafiResponseMsg: rentalData.waafiResponseMsg || null,
+    waafiResponseId: rentalData.waafiResponseId || null,
+    waafiResponseTimestamp: rentalData.waafiResponseTimestamp || null,
+    waafiTxAmount: rentalData.waafiTxAmount || null,
+    waafiMerchantCharges: rentalData.waafiMerchantCharges || null,
+  };
+}
+
+export async function loadOfficialActiveRentals(): Promise<ActiveRentalRow[]> {
+  const batteryStatesSnap = await db
+    .collection(BATTERY_STATE_COLLECTION)
+    .where("status", "==", "rented")
+    .get();
+
+  if (batteryStatesSnap.empty) {
+    return [];
+  }
+
+  const stateRows = batteryStatesSnap.docs
+    .map((doc) => ({
+      id: doc.id,
+      data: doc.data() as Record<string, any>,
+    }))
+    .filter((entry) => String(entry.data.activeRentalId || "").trim().length > 0);
+
+  const rentalDocs = await Promise.all(
+    stateRows.map((entry) =>
+      db
+        .collection(RENTALS_COLLECTION)
+        .doc(String(entry.data.activeRentalId || ""))
+        .get(),
+    ),
+  );
+
+  const rentalById = new Map<string, Record<string, any>>();
+  for (const rentalDoc of rentalDocs) {
+    if (!rentalDoc.exists) continue;
+    rentalById.set(rentalDoc.id, rentalDoc.data() as Record<string, any>);
+  }
+
+  return stateRows
+    .map((entry) =>
+      mergeStateWithRentalDoc(
+        entry.id,
+        entry.data,
+        rentalById.get(String(entry.data.activeRentalId || "")),
+      ),
+    )
+    .sort(compareRentalPriorityDesc);
+}
+
 export async function synchronizeBatteryStateFromActiveRentals(
   activeRentals: ActiveRentalRow[],
 ) {

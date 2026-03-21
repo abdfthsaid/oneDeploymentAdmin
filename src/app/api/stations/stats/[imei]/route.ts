@@ -8,9 +8,8 @@ import {
   getTrustedRentalPhone,
   hasRentalPhoneMismatch,
 } from '@/lib/activeRentals';
-import { synchronizeBatteryStateFromActiveRentals } from '@/lib/batteryState';
+import { loadOfficialActiveRentals } from '@/lib/batteryState';
 import { normalizeBatteryId } from '@/lib/batteryId';
-import { RENTALS_COLLECTION } from '@/lib/rentalsCollection';
 import { updateSingleStation } from '@/lib/stationStatsJob';
 
 const OVERDUE_HOURS = 5;
@@ -147,20 +146,8 @@ export async function GET(req: NextRequest, { params }: { params: { imei: string
         };
       }
 
-      const rentalsSnap = await db
-        .collection(RENTALS_COLLECTION)
-        .where('status', '==', 'rented')
-        .get();
-
-      const activeRentals: ActiveRentalRow[] = rentalsSnap.docs.map(
-        (rentalDoc) => ({
-          id: rentalDoc.id,
-          ...(rentalDoc.data() as Record<string, any>),
-        }),
-      );
-
-      const officialActiveRentals =
-        await synchronizeBatteryStateFromActiveRentals(activeRentals);
+      const officialActiveRentals: ActiveRentalRow[] =
+        await loadOfficialActiveRentals();
       const rentalGroups = groupActiveRentalsByBattery(officialActiveRentals);
 
       const station = buildLiveStationView(
