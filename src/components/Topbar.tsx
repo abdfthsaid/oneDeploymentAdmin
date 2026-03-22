@@ -61,8 +61,9 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const seenNotificationsStorageKey = useMemo(
-    () => `topbar:seen-notifications:${user?.username || user?.email || "guest"}`,
-    [user?.username, user?.email],
+    () =>
+      `topbar:seen-notifications:${user?.username || user?.id || user?._id || user?.name || "guest"}`,
+    [user?.username, user?.id, user?._id, user?.name],
   );
 
   useEffect(() => {
