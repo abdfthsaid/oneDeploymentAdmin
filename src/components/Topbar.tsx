@@ -41,6 +41,7 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [seenNotificationIds, setSeenNotificationIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -59,6 +60,31 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
   const notificationRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+  const seenNotificationsStorageKey = useMemo(
+    () => `topbar:seen-notifications:${user?.username || user?.email || "guest"}`,
+    [user?.username, user?.email],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const raw = window.localStorage.getItem(seenNotificationsStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      setSeenNotificationIds(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setSeenNotificationIds([]);
+    }
+  }, [seenNotificationsStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.localStorage.setItem(
+      seenNotificationsStorageKey,
+      JSON.stringify(seenNotificationIds),
+    );
+  }, [seenNotificationIds, seenNotificationsStorageKey]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -256,7 +282,37 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
     );
   };
 
-  const notificationCount = notifications.length;
+  const unreadNotificationCount = notifications.filter(
+    (notification) => !seenNotificationIds.includes(notification.id),
+  ).length;
+
+  const markNotificationsSeen = () => {
+    if (notifications.length === 0) return;
+
+    setSeenNotificationIds((current) => {
+      const merged = new Set(current);
+      notifications.forEach((notification) => {
+        if (notification?.id) {
+          merged.add(notification.id);
+        }
+      });
+      return Array.from(merged);
+    });
+  };
+
+  useEffect(() => {
+    if (pathname !== "/notifications" || notifications.length === 0) return;
+
+    setSeenNotificationIds((current) => {
+      const merged = new Set(current);
+      notifications.forEach((notification) => {
+        if (notification?.id) {
+          merged.add(notification.id);
+        }
+      });
+      return Array.from(merged);
+    });
+  }, [pathname, notifications]);
 
   return (
     <header className="flex items-center justify-between p-4 transition-colors duration-300 bg-white shadow-sm dark:bg-gray-800">
@@ -378,13 +434,19 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
           {/* Notifications */}
           <div className="relative" ref={notificationRef}>
             <button
-              onClick={() => setNotificationOpen(!notificationOpen)}
+              onClick={() => {
+                const nextOpen = !notificationOpen;
+                setNotificationOpen(nextOpen);
+                if (nextOpen) {
+                  markNotificationsSeen();
+                }
+              }}
               className="relative p-2 text-gray-500 rounded-lg dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <FontAwesomeIcon icon={faBell} />
-              {notificationCount > 0 && (
+              {unreadNotificationCount > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center z-10">
-                  {notificationCount > 99 ? "99+" : notificationCount}
+                  {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
                 </span>
               )}
             </button>
@@ -445,6 +507,7 @@ export default function Topbar({ setSidebarOpen }: TopbarProps) {
                 <div className="p-3 text-center border-t dark:border-gray-700">
                   <a
                     href="/notifications"
+                    onClick={markNotificationsSeen}
                     className="text-sm font-medium text-blue-600 dark:text-blue-400"
                   >
                     {t("viewAll")} {t("notifications")}
