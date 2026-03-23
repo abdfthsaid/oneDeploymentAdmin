@@ -30,20 +30,9 @@ export function getOtpExpiryMinutes(): number {
 }
 
 export async function createLoginChallenge(user: LoginChallengeUser) {
-  const challengeId = crypto.randomUUID();
+  const challengeId = user.id;
   const otpCode = generateOtpCode();
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
-
-  const existingChallenges = await db
-    .collection(LOGIN_CHALLENGES_COLLECTION)
-    .where("userId", "==", user.id)
-    .get();
-
-  if (!existingChallenges.empty) {
-    const batch = db.batch();
-    existingChallenges.docs.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-  }
 
   await db.collection(LOGIN_CHALLENGES_COLLECTION).doc(challengeId).set({
     userId: user.id,
@@ -54,6 +43,7 @@ export async function createLoginChallenge(user: LoginChallengeUser) {
     attempts: 0,
     createdAt: Timestamp.now(),
     expiresAt: Timestamp.fromDate(expiresAt),
+    updatedAt: Timestamp.now(),
   });
 
   return {
