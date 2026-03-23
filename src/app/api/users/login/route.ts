@@ -86,14 +86,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    try {
-      assertJwtConfigured();
-    } catch (error: any) {
-      return NextResponse.json(
-        { error: "JWT_SECRET is missing or too short in Vercel ❌" },
-        { status: 503 },
-      );
-    }
+    assertJwtConfigured();
 
     const challenge = await createLoginChallenge({
       id: userId,
@@ -116,7 +109,26 @@ export async function POST(req: NextRequest) {
       otpExpiresAt: challenge.expiresAt,
       email: maskEmail(email),
     });
-  } catch {
+  } catch (error: any) {
+    const message = typeof error?.message === "string" ? error.message : "";
+    if (message.includes("JWT_SECRET")) {
+      return NextResponse.json(
+        { error: "JWT_SECRET is missing or too short in Vercel ❌" },
+        { status: 503 },
+      );
+    }
+    if (message.includes("SMTP_USER") || message.includes("SMTP_PASS") || message.includes("SMTP_FROM")) {
+      return NextResponse.json(
+        { error: "SMTP email settings are missing in Vercel ❌" },
+        { status: 503 },
+      );
+    }
+    if (message.toLowerCase().includes("invalid login") || message.toLowerCase().includes("authentication unsuccessful")) {
+      return NextResponse.json(
+        { error: "SMTP email login failed. Check Gmail app password ❌" },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       { error: "Login failed" },
       { status: 500 },
