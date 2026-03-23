@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
+import { assertJwtConfigured } from "@/lib/auth";
 import { normalizeUsername } from "@/lib/inputValidation";
 import { createLoginChallenge, getOtpExpiryMinutes } from "@/lib/loginOtp";
 import { maskEmail, sendAdminOtpEmail } from "@/lib/mail";
@@ -82,6 +83,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "User email is missing. Contact another admin ❌" },
         { status: 400 },
+      );
+    }
+
+    try {
+      assertJwtConfigured();
+    } catch (error: any) {
+      return NextResponse.json(
+        { error: "JWT_SECRET is missing or too short in Vercel ❌" },
+        { status: 503 },
       );
     }
 

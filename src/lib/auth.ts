@@ -17,6 +17,10 @@ function getJwtSecret(): string {
   return secret;
 }
 
+export function assertJwtConfigured(): void {
+  getJwtSecret();
+}
+
 export function signToken(payload: TokenPayload): string {
   return jwt.sign(payload, getJwtSecret(), { expiresIn: TOKEN_EXPIRY });
 }

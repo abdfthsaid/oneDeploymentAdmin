@@ -44,7 +44,13 @@ export async function POST(req: NextRequest) {
       expiresAt,
       user: result.user,
     });
-  } catch {
+  } catch (error: any) {
+    if (typeof error?.message === "string" && error.message.includes("JWT_SECRET")) {
+      return NextResponse.json(
+        { error: "JWT_SECRET is missing or too short in Vercel ❌" },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: "OTP verification failed" }, { status: 500 });
   }
 }
