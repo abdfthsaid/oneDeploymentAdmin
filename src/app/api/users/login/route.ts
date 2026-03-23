@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
-import { signToken } from "@/lib/auth";
 import { normalizeUsername } from "@/lib/inputValidation";
+import { createLoginChallenge, getOtpExpiryMinutes } from "@/lib/loginOtp";
+import { maskEmail, sendAdminOtpEmail } from "@/lib/mail";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
 
 async function queryUser(
@@ -75,24 +76,35 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const token = signToken({
+    const email =
+      typeof userData.email === "string" ? userData.email.trim().toLowerCase() : "";
+    if (!email) {
+      return NextResponse.json(
+        { error: "User email is missing. Contact another admin ❌" },
+        { status: 400 },
+      );
+    }
+
+    const challenge = await createLoginChallenge({
       id: userId,
       username: userData.username,
       role: userData.role,
+      email,
     });
 
-    const expiresAt = Date.now() + 1 * 60 * 60 * 1000;
+    await sendAdminOtpEmail({
+      to: email,
+      username: userData.username,
+      otpCode: challenge.otpCode,
+      expiresMinutes: getOtpExpiryMinutes(),
+    });
 
     return NextResponse.json({
-      message: "Login successful ✅",
-      token,
-      expiresAt,
-      user: {
-        id: userId,
-        username: userData.username,
-        role: userData.role,
-        email: userData.email || null,
-      },
+      message: "OTP sent ✅",
+      otpRequired: true,
+      challengeId: challenge.challengeId,
+      otpExpiresAt: challenge.expiresAt,
+      email: maskEmail(email),
     });
   } catch {
     return NextResponse.json(

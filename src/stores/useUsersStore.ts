@@ -11,6 +11,12 @@ interface UserRecord {
   [key: string]: unknown;
 }
 
+interface LoginOtpChallenge {
+  challengeId: string;
+  email: string;
+  otpExpiresAt: number;
+}
+
 interface UsersState {
   users: UserRecord[];
   loading: boolean;
@@ -21,7 +27,11 @@ interface UsersState {
   loginUser: (credentials: {
     username: string;
     password: string;
-  }) => Promise<UserRecord>;
+  }) => Promise<LoginOtpChallenge>;
+  verifyLoginOtp: (payload: {
+    challengeId: string;
+    otp: string;
+  }) => Promise<{ user: UserRecord; token: string; expiresAt: string }>;
   registerUser: (userData: Record<string, unknown>) => Promise<void>;
   updateUser: (userId: string, data: Record<string, unknown>) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
@@ -72,22 +82,16 @@ export const useUsersStore = create<UsersState>((set) => ({
 
     try {
       const response = await attemptLogin(1);
-      const userData = response.data.user || response.data;
-      const token = response.data.token;
-
-      if (typeof window !== "undefined" && token) {
-        localStorage.setItem("authToken", token);
-        localStorage.setItem("sessionUser", JSON.stringify(userData));
-        if (response.data.expiresAt) {
-          localStorage.setItem(
-            "tokenExpiresAt",
-            String(response.data.expiresAt),
-          );
-        }
+      if (!response.data?.otpRequired || !response.data?.challengeId) {
+        throw new Error("OTP challenge was not created");
       }
 
-      set({ loading: false, success: "Login successful" });
-      return userData;
+      set({ loading: false, success: "OTP sent" });
+      return {
+        challengeId: String(response.data.challengeId),
+        email: String(response.data.email || ""),
+        otpExpiresAt: Number(response.data.otpExpiresAt || 0),
+      };
     } catch (error: any) {
       const status = error.response?.status;
       const message =
@@ -113,6 +117,35 @@ export const useUsersStore = create<UsersState>((set) => ({
 
       set({ error: msg, loading: false });
       throw new Error(msg);
+    }
+  },
+
+  verifyLoginOtp: async ({ challengeId, otp }) => {
+    set({ loading: true, error: null, success: null });
+    try {
+      const response = await apiService.verifyLoginOtp({ challengeId, otp });
+      const userData = response.data.user || {};
+      const token = String(response.data.token || "");
+      const expiresAt = String(
+        response.data.expiresAt || Date.now() + 60 * 60 * 1000,
+      );
+
+      if (typeof window !== "undefined" && token) {
+        localStorage.setItem("authToken", token);
+        localStorage.setItem("sessionUser", JSON.stringify(userData));
+        localStorage.setItem("tokenExpiresAt", expiresAt);
+      }
+
+      set({ loading: false, success: "Login successful" });
+      return { user: userData, token, expiresAt };
+    } catch (error: any) {
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "OTP verification failed";
+      set({ loading: false, error: message });
+      throw new Error(message);
     }
   },
 

@@ -21,6 +21,7 @@ export const API_ENDPOINTS = {
   // Users
   USERS_ALL: "/api/users/all",
   USERS_LOGIN: "/api/users/login",
+  USERS_LOGIN_VERIFY_OTP: "/api/users/login/verify-otp",
   USERS_ADD: "/api/users/add",
   USERS_UPDATE: "/api/users/update",
   USERS_DELETE: "/api/users/delete",
@@ -83,9 +84,13 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
+      const requestUrl = String(error.config?.url || "");
+      const isAuthFlowRequest =
+        requestUrl.startsWith(API_ENDPOINTS.USERS_LOGIN) ||
+        requestUrl.startsWith(API_ENDPOINTS.USERS_LOGIN_VERIFY_OTP);
       switch (error.response.status) {
         case 401:
-          if (typeof window !== "undefined") {
+          if (typeof window !== "undefined" && !isAuthFlowRequest) {
             localStorage.removeItem("authToken");
             localStorage.removeItem("sessionUser");
             localStorage.removeItem("tokenExpiresAt");
@@ -201,6 +206,10 @@ export const apiService = {
   getUsers: () => cachedGet(API_ENDPOINTS.USERS_ALL, GET_TTL.MEDIUM),
   login: (credentials: { username: string; password: string }) =>
     apiClient.post(API_ENDPOINTS.USERS_LOGIN, credentials, { timeout: 60_000 }),
+  verifyLoginOtp: (payload: { challengeId: string; otp: string }) =>
+    apiClient.post(API_ENDPOINTS.USERS_LOGIN_VERIFY_OTP, payload, {
+      timeout: 60_000,
+    }),
   addUser: (userData: Record<string, unknown>) =>
     runMutation(apiClient.post(API_ENDPOINTS.USERS_ADD, userData), [
       API_ENDPOINTS.USERS_ALL,
