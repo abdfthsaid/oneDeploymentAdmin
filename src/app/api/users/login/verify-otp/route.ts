@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { signToken } from "@/lib/auth";
+import { AUTH_COOKIE_NAME } from "@/lib/authCookie";
 import { verifyLoginChallenge } from "@/lib/loginOtp";
 
 export async function POST(req: NextRequest) {
@@ -38,12 +39,22 @@ export async function POST(req: NextRequest) {
 
     const expiresAt = Date.now() + 1 * 60 * 60 * 1000;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       message: "Login successful ✅",
       token,
       expiresAt,
       user: result.user,
     });
+    response.cookies.set({
+      name: AUTH_COOKIE_NAME,
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60,
+    });
+    return response;
   } catch (error: any) {
     if (typeof error?.message === "string" && error.message.includes("JWT_SECRET")) {
       return NextResponse.json(

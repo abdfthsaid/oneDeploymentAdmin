@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { NextRequest, NextResponse } from 'next/server';
+import { AUTH_COOKIE_NAME } from "@/lib/authCookie";
 
 const TOKEN_EXPIRY = '1h';
 
@@ -31,8 +32,10 @@ export function verifyToken(token: string): TokenPayload {
 
 export function getTokenFromRequest(req: NextRequest): string | null {
   const authHeader = req.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  return authHeader.split(' ')[1];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.split(' ')[1];
+  }
+  return req.cookies.get(AUTH_COOKIE_NAME)?.value || null;
 }
 
 export function authenticateRequest(req: NextRequest): TokenPayload | NextResponse {

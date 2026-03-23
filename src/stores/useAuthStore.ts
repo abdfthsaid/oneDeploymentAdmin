@@ -12,6 +12,20 @@ interface AuthState {
   initAuth: () => void;
 }
 
+function clearBrowserSession() {
+  clearApiGetCache();
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("sessionUser");
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("tokenExpiresAt");
+    void fetch("/api/users/logout", {
+      method: "POST",
+      credentials: "include",
+      keepalive: true,
+    }).catch(() => undefined);
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   token: null,
@@ -30,12 +44,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
-    clearApiGetCache();
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("sessionUser");
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("tokenExpiresAt");
-    }
+    clearBrowserSession();
     set({ user: null, token: null });
   },
 
@@ -66,10 +75,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         }, timeUntilExpiry);
       } else {
         // Token expired
-        clearApiGetCache();
-        localStorage.removeItem("sessionUser");
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("tokenExpiresAt");
+        clearBrowserSession();
         set({ user: null, token: null, authLoading: false });
       }
     } else {

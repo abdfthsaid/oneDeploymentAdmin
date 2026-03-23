@@ -94,6 +94,11 @@ apiClient.interceptors.response.use(
             localStorage.removeItem("authToken");
             localStorage.removeItem("sessionUser");
             localStorage.removeItem("tokenExpiresAt");
+            void fetch("/api/users/logout", {
+              method: "POST",
+              credentials: "include",
+              keepalive: true,
+            }).catch(() => undefined);
             clearApiGetCache();
             window.location.href = "/login";
           }
