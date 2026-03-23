@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { NextRequest, NextResponse } from 'next/server';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'danab_power_secret_key_2024';
 const TOKEN_EXPIRY = '1h';
 
 export interface TokenPayload {
@@ -10,12 +9,20 @@ export interface TokenPayload {
   role: string;
 }
 
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.trim().length < 32) {
+    throw new Error("JWT_SECRET must be set and at least 32 characters long");
+  }
+  return secret;
+}
+
 export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: TOKEN_EXPIRY });
 }
 
 export function verifyToken(token: string): TokenPayload {
-  return jwt.verify(token, JWT_SECRET) as TokenPayload;
+  return jwt.verify(token, getJwtSecret()) as TokenPayload;
 }
 
 export function getTokenFromRequest(req: NextRequest): string | null {

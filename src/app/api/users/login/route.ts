@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { signToken } from "@/lib/auth";
+import { normalizeUsername } from "@/lib/inputValidation";
+import { hashPassword, verifyPassword } from "@/lib/passwords";
 
 async function queryUser(
   username: string,
   attempt = 1,
 ): Promise<{ userId: string; userData: any } | null> {
   try {
-    console.log(`🔍 Firebase query attempt ${attempt} for user: ${username}`);
     const userSnap = await db
       .collection("system_users")
       .where("username", "==", username)
@@ -20,13 +21,7 @@ async function queryUser(
     }
     return null;
   } catch (error: any) {
-    console.error(
-      `❌ Firebase query attempt ${attempt} failed:`,
-      error.message,
-      error.code,
-    );
     if (attempt < 3) {
-      console.log(`⏳ Retrying in ${attempt * 2} seconds...`);
       await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
       return queryUser(username, attempt + 1);
     }
@@ -35,12 +30,11 @@ async function queryUser(
 }
 
 export async function POST(req: NextRequest) {
-  const startTime = Date.now();
-
   try {
     const { username, password } = await req.json();
+    const normalizedUsername = normalizeUsername(username);
 
-    if (!username || !password) {
+    if (!normalizedUsername || !password) {
       return NextResponse.json(
         { error: "Username and password required ❌" },
         { status: 400 },
@@ -50,14 +44,10 @@ export async function POST(req: NextRequest) {
     let result: { userId: string; userData: any } | null = null;
 
     try {
-      result = await queryUser(username);
+      result = await queryUser(normalizedUsername);
     } catch (error: any) {
-      console.error(
-        `🚨 All Firebase retries failed for ${username}:`,
-        error.message,
-      );
       return NextResponse.json(
-        { error: `Database connection failed: ${error.message}` },
+        { error: "Database connection failed" },
         { status: 503 },
       );
     }
@@ -71,11 +61,18 @@ export async function POST(req: NextRequest) {
 
     const { userId, userData } = result;
 
-    if (userData.password !== password) {
+    const passwordCheck = await verifyPassword(password, userData.password);
+    if (!passwordCheck.valid) {
       return NextResponse.json(
         { error: "Invalid username or password ❌" },
         { status: 401 },
       );
+    }
+    if (passwordCheck.needsRehash) {
+      await db.collection("system_users").doc(userId).update({
+        password: await hashPassword(password),
+        updatedAt: new Date(),
+      });
     }
 
     const token = signToken({
@@ -85,11 +82,6 @@ export async function POST(req: NextRequest) {
     });
 
     const expiresAt = Date.now() + 1 * 60 * 60 * 1000;
-
-    const totalTime = Date.now() - startTime;
-    console.log(
-      `✅ Login successful for ${username} - Total time: ${totalTime}ms`,
-    );
 
     return NextResponse.json({
       message: "Login successful ✅",
@@ -102,10 +94,9 @@ export async function POST(req: NextRequest) {
         email: userData.email || null,
       },
     });
-  } catch (error: any) {
-    console.error("Login error:", error.message, error.stack);
+  } catch {
     return NextResponse.json(
-      { error: `Login failed: ${error.message}` },
+      { error: "Login failed" },
       { status: 500 },
     );
   }

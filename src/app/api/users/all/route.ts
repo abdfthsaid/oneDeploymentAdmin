@@ -20,10 +20,18 @@ export async function GET(req: NextRequest) {
       CACHE_TTL_MS,
       async () => {
         const snapshot = await db.collection("system_users").get();
-        return snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        return snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            username: data.username || null,
+            email: data.email || null,
+            role: data.role || null,
+            permissions: data.permissions || [],
+            createdAt: data.createdAt || null,
+            updatedAt: data.updatedAt || null,
+          };
+        });
       },
     );
     return NextResponse.json(users, {
@@ -33,8 +41,7 @@ export async function GET(req: NextRequest) {
           : buildPrivateCacheControl(CACHE_TTL_MS),
       },
     });
-  } catch (err: any) {
-    console.error("Fetch all users error:", err);
+  } catch {
     return NextResponse.json(
       { error: "Failed to fetch users ❌" },
       { status: 500 },

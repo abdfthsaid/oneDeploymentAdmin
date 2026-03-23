@@ -93,12 +93,6 @@ apiClient.interceptors.response.use(
             window.location.href = "/login";
           }
           break;
-        case 403:
-          console.error("Access denied");
-          break;
-        case 500:
-          console.error("Server error");
-          break;
       }
     }
     return Promise.reject(error);

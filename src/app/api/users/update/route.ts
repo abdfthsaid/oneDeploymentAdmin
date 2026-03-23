@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { authenticateRequest, requireRole, TokenPayload } from "@/lib/auth";
+import { writeAuditLog } from "@/lib/auditLog";
 import { cacheComponent } from "@/lib/cacheComponent";
+import {
+  assertValidEmail,
+  assertValidPassword,
+  assertValidUsername,
+  normalizeEmail,
+  normalizeUsername,
+} from "@/lib/inputValidation";
+import { hashPassword } from "@/lib/passwords";
 
 export async function PUT(req: NextRequest) {
   const auth = authenticateRequest(req);
   if (auth instanceof NextResponse) return auth;
-  const roleCheck = requireRole(auth as TokenPayload, ["admin"]);
+  const user = auth as TokenPayload;
+  const roleCheck = requireRole(user, ["admin"]);
   if (roleCheck) return roleCheck;
 
   try {
@@ -61,10 +71,49 @@ export async function PUT(req: NextRequest) {
       currentData = snap.docs[0].data();
     }
 
-    if (updates.username && updates.username !== currentData.username) {
+    const sanitizedUpdates: Record<string, unknown> = {};
+
+    if (typeof updates.username === "string") {
+      const normalizedUsername = normalizeUsername(updates.username);
+      const usernameError = assertValidUsername(normalizedUsername);
+      if (usernameError) {
+        return NextResponse.json({ error: usernameError }, { status: 400 });
+      }
+      sanitizedUpdates.username = normalizedUsername;
+    }
+
+    if (typeof updates.email === "string") {
+      const normalizedEmail = normalizeEmail(updates.email);
+      const emailError = assertValidEmail(normalizedEmail);
+      if (emailError) {
+        return NextResponse.json({ error: emailError }, { status: 400 });
+      }
+      sanitizedUpdates.email = normalizedEmail;
+    }
+
+    if (typeof updates.role === "string") {
+      sanitizedUpdates.role = updates.role;
+    }
+
+    if (Array.isArray(updates.permissions)) {
+      sanitizedUpdates.permissions = updates.permissions;
+    }
+
+    if (typeof updates.password === "string" && updates.password.trim().length > 0) {
+      const passwordError = assertValidPassword(updates.password);
+      if (passwordError) {
+        return NextResponse.json({ error: passwordError }, { status: 400 });
+      }
+      sanitizedUpdates.password = await hashPassword(updates.password);
+    }
+
+    if (
+      sanitizedUpdates.username &&
+      sanitizedUpdates.username !== currentData.username
+    ) {
       const usernameSnap = await db
         .collection("system_users")
-        .where("username", "==", updates.username)
+        .where("username", "==", sanitizedUpdates.username)
         .get();
       if (!usernameSnap.empty) {
         return NextResponse.json(
@@ -74,10 +123,10 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    if (updates.email && updates.email !== currentData.email) {
+    if (sanitizedUpdates.email && sanitizedUpdates.email !== currentData.email) {
       const emailSnap = await db
         .collection("system_users")
-        .where("email", "==", updates.email)
+        .where("email", "==", sanitizedUpdates.email)
         .get();
       if (!emailSnap.empty) {
         return NextResponse.json(
@@ -87,11 +136,26 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    await userDocRef.update({ ...updates, updatedAt: new Date() });
+    const after = {
+      ...currentData,
+      ...sanitizedUpdates,
+      updatedAt: new Date(),
+    };
+
+    await userDocRef.update(after);
+    await writeAuditLog({
+      req,
+      actor: user,
+      action: "user.update",
+      targetType: "user",
+      targetId: userDocRef.id,
+      targetLabel: String(after.username || currentData.username || ""),
+      before: currentData,
+      after,
+    });
     cacheComponent.invalidatePrefix("users:");
     return NextResponse.json({ message: "User updated successfully ✅" });
-  } catch (error: any) {
-    console.error("Update user error:", error);
+  } catch {
     return NextResponse.json(
       { error: "Failed to update user ❌" },
       { status: 500 },
