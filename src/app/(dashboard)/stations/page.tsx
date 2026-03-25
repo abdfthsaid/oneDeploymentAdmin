@@ -51,10 +51,21 @@ export default function StationsPage() {
     );
   };
 
-  const fetchStations = async () => {
-    const response = await apiService.getStations();
-    setStations(response.data.stations || []);
-    setFilteredStations(response.data.stations || []);
+  const fetchStations = async (force = false) => {
+    const response = await apiService.getStations(force);
+    const nextStations = response.data.stations || [];
+    setStations(nextStations);
+    setFilteredStations(
+      search
+        ? nextStations.filter(
+            (station: any) =>
+              station.imei?.toLowerCase().includes(search.toLowerCase()) ||
+              station.name?.toLowerCase().includes(search.toLowerCase()) ||
+              station.iccid?.toLowerCase().includes(search.toLowerCase()) ||
+              station.location?.toLowerCase().includes(search.toLowerCase()),
+          )
+        : nextStations,
+    );
   };
 
   useEffect(() => {
@@ -98,7 +109,7 @@ export default function StationsPage() {
       showAlert("Station registered successfully!", "success");
       setTimeout(() => {
         closeModal();
-        fetchStations();
+        fetchStations(true);
       }, 1000);
     } catch (error: any) {
       showAlert(
@@ -123,7 +134,7 @@ export default function StationsPage() {
       showAlert("Station updated successfully!", "success");
       setTimeout(() => {
         closeModal();
-        fetchStations();
+        fetchStations(true);
       }, 1000);
     } catch (error: any) {
       showAlert(
@@ -155,7 +166,7 @@ export default function StationsPage() {
       showAlert("Station deleted successfully!", "error");
       setTimeout(() => {
         setConfirmDelete({ open: false, station: null });
-        fetchStations();
+        fetchStations(true);
       }, 1000);
     } catch (error: any) {
       showAlert(

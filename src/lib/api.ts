@@ -210,7 +210,22 @@ export const apiService = {
   invalidateReadCache: invalidateApiGetCachePrefixes,
 
   // Users
-  getUsers: () => cachedGet(API_ENDPOINTS.USERS_ALL, GET_TTL.MEDIUM),
+  getUsers: (fresh = false) => {
+    const endpoint = fresh
+      ? `${API_ENDPOINTS.USERS_ALL}?fresh=1`
+      : API_ENDPOINTS.USERS_ALL;
+
+    if (!fresh) {
+      return cachedGet(endpoint, GET_TTL.MEDIUM);
+    }
+
+    invalidateApiGetCachePrefixes([API_ENDPOINTS.USERS_ALL]);
+    return apiClient.get(endpoint, {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    });
+  },
   login: (credentials: { username: string; password: string }) =>
     apiClient.post(API_ENDPOINTS.USERS_LOGIN, credentials, { timeout: 60_000 }),
   verifyLoginOtp: (payload: { challengeId: string; otp: string }) =>
@@ -239,7 +254,22 @@ export const apiService = {
     ]),
 
   // Stations
-  getStations: () => cachedGet(API_ENDPOINTS.STATIONS_BASIC, GET_TTL.LONG),
+  getStations: (fresh = false) => {
+    const endpoint = fresh
+      ? `${API_ENDPOINTS.STATIONS_BASIC}?fresh=1`
+      : API_ENDPOINTS.STATIONS_BASIC;
+
+    if (!fresh) {
+      return cachedGet(endpoint, GET_TTL.LONG);
+    }
+
+    invalidateApiGetCachePrefixes([API_ENDPOINTS.STATIONS_BASIC]);
+    return apiClient.get(endpoint, {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    });
+  },
   addStation: (data: Record<string, unknown>) =>
     runMutation(apiClient.post(API_ENDPOINTS.STATIONS_ADD, data), [
       "/api/stations",

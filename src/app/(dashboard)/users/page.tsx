@@ -11,7 +11,7 @@ import {
   faPen,
 } from "@fortawesome/free-solid-svg-icons";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { apiService, apiClient } from "@/lib/api";
+import { apiService } from "@/lib/api";
 import CustomAlert from "@/components/CustomAlert";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
@@ -70,17 +70,17 @@ export default function UsersPage() {
 
   const fetchUsers = async (force = false) => {
     setLoading(true);
+    setError("");
     try {
-      if (force) {
-        apiService.invalidateReadCache(["/api/users"]);
-        const res = await apiClient.get("/api/users?fresh=1");
-        setUsers(res.data.users || res.data || []);
-      } else {
-        const res = await apiService.getUsers();
-        setUsers(res.data.users || res.data || []);
-      }
+      const res = await apiService.getUsers(force);
+      setUsers(res.data.users || res.data || []);
     } catch (err: any) {
-      setError(err.message || "Failed to fetch users");
+      setError(
+        err.response?.data?.error ||
+          err.response?.data?.message ||
+          err.message ||
+          "Failed to fetch users",
+      );
     } finally {
       setLoading(false);
     }
