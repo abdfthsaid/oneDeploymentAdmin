@@ -240,9 +240,6 @@ export default function LoginPage() {
               <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200">
                 OTP sent to <strong>{otpStep.email}</strong>
               </div>
-              <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                If you asked more than once, use the newest email code only.
-              </div>
               <div>
                 <label className="block text-gray-700 dark:text-gray-200 mb-1 font-medium">
                   6-digit OTP
