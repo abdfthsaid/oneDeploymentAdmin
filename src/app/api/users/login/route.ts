@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/firebase-admin";
 import { assertJwtConfigured } from "@/lib/auth";
-import { normalizeUsername } from "@/lib/inputValidation";
+import { normalizeUsername, normalizeUsernameLookup } from "@/lib/inputValidation";
 import { createLoginChallenge, getOtpExpiryMinutes } from "@/lib/loginOtp";
 import { maskEmail, sendAdminOtpEmail } from "@/lib/mail";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
@@ -11,15 +11,57 @@ async function queryUser(
   attempt = 1,
 ): Promise<{ userId: string; userData: any } | null> {
   try {
-    const userSnap = await db
+    const usernameLookup = normalizeUsernameLookup(username);
+
+    const normalizedSnap = await db
+      .collection("system_users")
+      .where("usernameNormalized", "==", usernameLookup)
+      .limit(1)
+      .get();
+
+    if (!normalizedSnap.empty) {
+      const userDoc = normalizedSnap.docs[0];
+      const userData = userDoc.data();
+
+      if (userData.usernameNormalized !== usernameLookup) {
+        await userDoc.ref.update({
+          usernameNormalized: usernameLookup,
+          updatedAt: new Date(),
+        });
+      }
+
+      return { userId: userDoc.id, userData };
+    }
+
+    const exactSnap = await db
       .collection("system_users")
       .where("username", "==", username)
       .limit(1)
       .get();
 
-    if (!userSnap.empty) {
-      const userDoc = userSnap.docs[0];
-      return { userId: userDoc.id, userData: userDoc.data() };
+    if (!exactSnap.empty) {
+      const userDoc = exactSnap.docs[0];
+      const userData = userDoc.data();
+      await userDoc.ref.update({
+        usernameNormalized: normalizeUsernameLookup(userData.username || username),
+        updatedAt: new Date(),
+      });
+      return { userId: userDoc.id, userData };
+    }
+
+    const legacySnap = await db.collection("system_users").get();
+    const legacyDoc = legacySnap.docs.find((doc) => {
+      const storedUsername = String(doc.data().username || "");
+      return normalizeUsernameLookup(storedUsername) === usernameLookup;
+    });
+
+    if (legacyDoc) {
+      const userData = legacyDoc.data();
+      await legacyDoc.ref.update({
+        usernameNormalized: normalizeUsernameLookup(userData.username || username),
+        updatedAt: new Date(),
+      });
+      return { userId: legacyDoc.id, userData };
     }
     return null;
   } catch (error: any) {

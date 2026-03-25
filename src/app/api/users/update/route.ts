@@ -9,6 +9,7 @@ import {
   assertValidUsername,
   normalizeEmail,
   normalizeUsername,
+  normalizeUsernameLookup,
 } from "@/lib/inputValidation";
 import { hashPassword } from "@/lib/passwords";
 
@@ -75,11 +76,13 @@ export async function PUT(req: NextRequest) {
 
     if (typeof updates.username === "string") {
       const normalizedUsername = normalizeUsername(updates.username);
+      const normalizedUsernameLookup = normalizeUsernameLookup(updates.username);
       const usernameError = assertValidUsername(normalizedUsername);
       if (usernameError) {
         return NextResponse.json({ error: usernameError }, { status: 400 });
       }
       sanitizedUpdates.username = normalizedUsername;
+      sanitizedUpdates.usernameNormalized = normalizedUsernameLookup;
     }
 
     if (typeof updates.email === "string") {
@@ -111,11 +114,26 @@ export async function PUT(req: NextRequest) {
       sanitizedUpdates.username &&
       sanitizedUpdates.username !== currentData.username
     ) {
+      const usernameNormalizedSnap = await db
+        .collection("system_users")
+        .where(
+          "usernameNormalized",
+          "==",
+          String(sanitizedUpdates.usernameNormalized || ""),
+        )
+        .get();
+      if (usernameNormalizedSnap.docs.some((doc) => doc.id !== userDocRef.id)) {
+        return NextResponse.json(
+          { error: "Username already exists ❌" },
+          { status: 409 },
+        );
+      }
+
       const usernameSnap = await db
         .collection("system_users")
         .where("username", "==", sanitizedUpdates.username)
         .get();
-      if (!usernameSnap.empty) {
+      if (usernameSnap.docs.some((doc) => doc.id !== userDocRef.id)) {
         return NextResponse.json(
           { error: "Username already exists ❌" },
           { status: 409 },
@@ -128,7 +146,7 @@ export async function PUT(req: NextRequest) {
         .collection("system_users")
         .where("email", "==", sanitizedUpdates.email)
         .get();
-      if (!emailSnap.empty) {
+      if (emailSnap.docs.some((doc) => doc.id !== userDocRef.id)) {
         return NextResponse.json(
           { error: "Email already exists ❌" },
           { status: 409 },

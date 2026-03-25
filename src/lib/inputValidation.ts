@@ -6,6 +6,10 @@ export function normalizeUsername(username: unknown): string {
   return typeof username === "string" ? username.trim() : "";
 }
 
+export function normalizeUsernameLookup(username: unknown): string {
+  return normalizeUsername(username).toLowerCase();
+}
+
 export function assertValidUsername(username: string): string | null {
   if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) {
     return "Username must be 3-32 characters and use only letters, numbers, dot, underscore, or dash.";

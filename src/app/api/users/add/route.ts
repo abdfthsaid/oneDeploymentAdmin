@@ -9,6 +9,7 @@ import {
   assertValidUsername,
   normalizeEmail,
   normalizeUsername,
+  normalizeUsernameLookup,
 } from '@/lib/inputValidation';
 import { hashPassword } from '@/lib/passwords';
 
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
   try {
     const { username, password, role, email, permissions = [] } = await req.json();
     const normalizedUsername = normalizeUsername(username);
+    const normalizedUsernameLookup = normalizeUsernameLookup(username);
     const normalizedEmail = normalizeEmail(email);
 
     if (!normalizedUsername || !password || !role || !normalizedEmail) {
@@ -51,6 +53,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const usernameNormalizedSnap = await db
+      .collection('system_users')
+      .where('usernameNormalized', '==', normalizedUsernameLookup)
+      .get();
+    if (!usernameNormalizedSnap.empty) {
+      return NextResponse.json({ error: 'Username already exists ❌' }, { status: 409 });
+    }
+
     const usernameSnap = await db.collection('system_users').where('username', '==', normalizedUsername).get();
     if (!usernameSnap.empty) {
       return NextResponse.json({ error: 'Username already exists ❌' }, { status: 409 });
@@ -64,6 +74,7 @@ export async function POST(req: NextRequest) {
     const now = new Date();
     const after = {
       username: normalizedUsername,
+      usernameNormalized: normalizedUsernameLookup,
       role,
       email: normalizedEmail,
       permissions: Array.isArray(permissions) ? permissions : [],
