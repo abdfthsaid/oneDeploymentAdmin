@@ -6,6 +6,7 @@ import db from "@/lib/firebase-admin";
 const LOGIN_CHALLENGES_COLLECTION = "admin_login_challenges";
 const OTP_EXPIRY_MINUTES = 10;
 const MAX_OTP_ATTEMPTS = 5;
+const OTP_RESEND_COOLDOWN_SECONDS = 30;
 
 export type LoginChallengeUser = {
   id: string;
@@ -29,10 +30,17 @@ export function getOtpExpiryMinutes(): number {
   return OTP_EXPIRY_MINUTES;
 }
 
+export function getOtpResendCooldownSeconds(): number {
+  return OTP_RESEND_COOLDOWN_SECONDS;
+}
+
 export async function createLoginChallenge(user: LoginChallengeUser) {
   const challengeId = user.id;
   const otpCode = generateOtpCode();
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+  const resendAvailableAt = new Date(
+    Date.now() + OTP_RESEND_COOLDOWN_SECONDS * 1000,
+  );
 
   await db.collection(LOGIN_CHALLENGES_COLLECTION).doc(challengeId).set({
     userId: user.id,
@@ -43,6 +51,7 @@ export async function createLoginChallenge(user: LoginChallengeUser) {
     attempts: 0,
     createdAt: Timestamp.now(),
     expiresAt: Timestamp.fromDate(expiresAt),
+    resendAvailableAt: Timestamp.fromDate(resendAvailableAt),
     updatedAt: Timestamp.now(),
   });
 
@@ -50,6 +59,58 @@ export async function createLoginChallenge(user: LoginChallengeUser) {
     challengeId,
     otpCode,
     expiresAt: expiresAt.getTime(),
+    resendAvailableAt: resendAvailableAt.getTime(),
+  };
+}
+
+export async function resendLoginChallenge(
+  challengeId: string,
+): Promise<
+  | {
+      ok: true;
+      challengeId: string;
+      otpCode: string;
+      expiresAt: number;
+      resendAvailableAt: number;
+      user: LoginChallengeUser;
+    }
+  | { ok: false; reason: "missing" | "expired" | "cooldown" }
+> {
+  const docRef = db.collection(LOGIN_CHALLENGES_COLLECTION).doc(challengeId);
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    return { ok: false, reason: "missing" };
+  }
+
+  const data = doc.data() as Record<string, any>;
+  const expiresAt = data.expiresAt?.toDate?.() as Date | undefined;
+  if (!expiresAt || expiresAt.getTime() < Date.now()) {
+    await docRef.delete();
+    return { ok: false, reason: "expired" };
+  }
+
+  const resendAvailableAt = data.resendAvailableAt?.toDate?.() as Date | undefined;
+  if (resendAvailableAt && resendAvailableAt.getTime() > Date.now()) {
+    return { ok: false, reason: "cooldown" };
+  }
+
+  const user: LoginChallengeUser = {
+    id: String(data.userId || ""),
+    username: String(data.username || ""),
+    role: String(data.role || ""),
+    email: String(data.email || ""),
+  };
+
+  const refreshed = await createLoginChallenge(user);
+
+  return {
+    ok: true,
+    challengeId: refreshed.challengeId,
+    otpCode: refreshed.otpCode,
+    expiresAt: refreshed.expiresAt,
+    resendAvailableAt: refreshed.resendAvailableAt,
+    user,
   };
 }
 

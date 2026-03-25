@@ -22,6 +22,7 @@ export const API_ENDPOINTS = {
   USERS_ALL: "/api/users/all",
   USERS_LOGIN: "/api/users/login",
   USERS_LOGIN_VERIFY_OTP: "/api/users/login/verify-otp",
+  USERS_LOGIN_RESEND_OTP: "/api/users/login/resend-otp",
   USERS_ADD: "/api/users/add",
   USERS_UPDATE: "/api/users/update",
   USERS_DELETE: "/api/users/delete",
@@ -87,7 +88,8 @@ apiClient.interceptors.response.use(
       const requestUrl = String(error.config?.url || "");
       const isAuthFlowRequest =
         requestUrl.startsWith(API_ENDPOINTS.USERS_LOGIN) ||
-        requestUrl.startsWith(API_ENDPOINTS.USERS_LOGIN_VERIFY_OTP);
+        requestUrl.startsWith(API_ENDPOINTS.USERS_LOGIN_VERIFY_OTP) ||
+        requestUrl.startsWith(API_ENDPOINTS.USERS_LOGIN_RESEND_OTP);
       switch (error.response.status) {
         case 401:
           if (typeof window !== "undefined" && !isAuthFlowRequest) {
@@ -213,6 +215,10 @@ export const apiService = {
     apiClient.post(API_ENDPOINTS.USERS_LOGIN, credentials, { timeout: 60_000 }),
   verifyLoginOtp: (payload: { challengeId: string; otp: string }) =>
     apiClient.post(API_ENDPOINTS.USERS_LOGIN_VERIFY_OTP, payload, {
+      timeout: 60_000,
+    }),
+  resendLoginOtp: (payload: { challengeId: string }) =>
+    apiClient.post(API_ENDPOINTS.USERS_LOGIN_RESEND_OTP, payload, {
       timeout: 60_000,
     }),
   addUser: (userData: Record<string, unknown>) =>

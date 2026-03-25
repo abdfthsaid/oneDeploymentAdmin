@@ -15,6 +15,7 @@ interface LoginOtpChallenge {
   challengeId: string;
   email: string;
   otpExpiresAt: number;
+  resendAvailableAt: number;
 }
 
 interface UsersState {
@@ -28,6 +29,7 @@ interface UsersState {
     username: string;
     password: string;
   }) => Promise<LoginOtpChallenge>;
+  resendLoginOtp: (payload: { challengeId: string }) => Promise<LoginOtpChallenge>;
   verifyLoginOtp: (payload: {
     challengeId: string;
     otp: string;
@@ -66,22 +68,8 @@ export const useUsersStore = create<UsersState>((set) => ({
   loginUser: async (credentials) => {
     set({ loading: true, error: null, success: null });
 
-    const attemptLogin = async (attempt: number): Promise<any> => {
-      try {
-        return await apiService.login(credentials);
-      } catch (error: any) {
-        const status = error.response?.status;
-        if ((status === 503 || !error.response) && attempt < 3) {
-          // Firebase cold start or server not ready - retry
-          await new Promise((r) => setTimeout(r, attempt * 2000));
-          return attemptLogin(attempt + 1);
-        }
-        throw error;
-      }
-    };
-
     try {
-      const response = await attemptLogin(1);
+      const response = await apiService.login(credentials);
       if (!response.data?.otpRequired || !response.data?.challengeId) {
         throw new Error("OTP challenge was not created");
       }
@@ -91,6 +79,7 @@ export const useUsersStore = create<UsersState>((set) => ({
         challengeId: String(response.data.challengeId),
         email: String(response.data.email || ""),
         otpExpiresAt: Number(response.data.otpExpiresAt || 0),
+        resendAvailableAt: Number(response.data.resendAvailableAt || 0),
       };
     } catch (error: any) {
       const status = error.response?.status;
@@ -117,6 +106,28 @@ export const useUsersStore = create<UsersState>((set) => ({
 
       set({ error: msg, loading: false });
       throw new Error(msg);
+    }
+  },
+
+  resendLoginOtp: async ({ challengeId }) => {
+    set({ loading: true, error: null, success: null });
+    try {
+      const response = await apiService.resendLoginOtp({ challengeId });
+      set({ loading: false, success: "OTP resent" });
+      return {
+        challengeId: String(response.data.challengeId || challengeId),
+        email: String(response.data.email || ""),
+        otpExpiresAt: Number(response.data.otpExpiresAt || 0),
+        resendAvailableAt: Number(response.data.resendAvailableAt || 0),
+      };
+    } catch (error: any) {
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to resend OTP";
+      set({ loading: false, error: message });
+      throw new Error(message);
     }
   },
 

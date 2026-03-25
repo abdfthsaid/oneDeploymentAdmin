@@ -10,8 +10,15 @@ import { useUsersStore } from "@/stores/useUsersStore";
 export default function LoginPage() {
   const router = useRouter();
   const { user, login } = useAuthStore();
-  const { loginUser, verifyLoginOtp, loading, error, success, clearMessages } =
-    useUsersStore();
+  const {
+    loginUser,
+    resendLoginOtp,
+    verifyLoginOtp,
+    loading,
+    error,
+    success,
+    clearMessages,
+  } = useUsersStore();
 
   const [form, setForm] = useState({ username: "", password: "" });
   const [otpForm, setOtpForm] = useState({ otp: "" });
@@ -19,8 +26,10 @@ export default function LoginPage() {
     challengeId: string;
     email: string;
     otpExpiresAt: number;
+    resendAvailableAt: number;
   } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     return () => {
@@ -41,6 +50,16 @@ export default function LoginPage() {
     }
   }, [user, router]);
 
+  useEffect(() => {
+    if (!otpStep) return;
+
+    const interval = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [otpStep]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
@@ -52,6 +71,7 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     clearMessages();
     try {
       const challenge = await loginUser(form);
@@ -64,7 +84,7 @@ export default function LoginPage() {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otpStep) return;
+    if (!otpStep || loading) return;
     clearMessages();
     try {
       const result = await verifyLoginOtp({
@@ -82,6 +102,25 @@ export default function LoginPage() {
     setOtpForm({ otp: "" });
     clearMessages();
   };
+
+  const handleResendOtp = async () => {
+    if (!otpStep || loading || resendSecondsRemaining > 0) return;
+    clearMessages();
+    try {
+      const nextChallenge = await resendLoginOtp({
+        challengeId: otpStep.challengeId,
+      });
+      setOtpStep(nextChallenge);
+      setOtpForm({ otp: "" });
+      setNow(Date.now());
+    } catch (err) {
+      // Error is handled by the store
+    }
+  };
+
+  const resendSecondsRemaining = otpStep
+    ? Math.max(0, Math.ceil((otpStep.resendAvailableAt - now) / 1000))
+    : 0;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-300 dark:from-gray-900 dark:to-gray-800 relative overflow-hidden">
@@ -201,6 +240,9 @@ export default function LoginPage() {
               <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200">
                 OTP sent to <strong>{otpStep.email}</strong>
               </div>
+              <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                If you asked more than once, use the newest email code only.
+              </div>
               <div>
                 <label className="block text-gray-700 dark:text-gray-200 mb-1 font-medium">
                   6-digit OTP
@@ -224,6 +266,16 @@ export default function LoginPage() {
                 className="w-full bg-gradient-to-r from-blue-600 to-blue-400 hover:from-blue-700 hover:to-blue-500 text-white py-3 px-4 rounded-lg font-semibold shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {loading ? "Verifying..." : "Verify OTP"}
+              </button>
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                disabled={loading || resendSecondsRemaining > 0}
+                className="w-full border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 py-3 px-4 rounded-lg font-semibold transition-colors hover:bg-blue-50 dark:hover:bg-blue-950 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {resendSecondsRemaining > 0
+                  ? `Resend OTP in ${resendSecondsRemaining}s`
+                  : "Resend OTP"}
               </button>
               <button
                 type="button"

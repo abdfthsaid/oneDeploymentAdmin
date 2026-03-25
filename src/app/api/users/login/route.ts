@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
       otpRequired: true,
       challengeId: challenge.challengeId,
       otpExpiresAt: challenge.expiresAt,
+      resendAvailableAt: challenge.resendAvailableAt,
       email: maskEmail(email),
     });
   } catch (error: any) {
