@@ -28,6 +28,27 @@ export const ACTIVE_STATIONS = ["WSEP161741066502", "WSEP161741066503"];
 
 const stationCache: Record<string, any> = {};
 
+function normalizeHeyChargeState(value?: string | null) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isHealthyHeyChargeState(value?: string | null) {
+  const normalized = normalizeHeyChargeState(value);
+
+  if (!normalized) {
+    return true;
+  }
+
+  return [
+    "normal",
+    "online",
+    "available",
+    "ok",
+    "healthy",
+    "1",
+  ].includes(normalized);
+}
+
 // Update a single station — used by round-robin cron
 export async function updateSingleStation(imei: string) {
   const HEYCHARGE_API_KEY = process.env.HEYCHARGE_API_KEY;
@@ -116,19 +137,31 @@ export async function updateSingleStation(imei: string) {
       if (!b.slot_id || typeof b.slot_id !== "string") return;
       const batteryLevel = parseInt(b.battery_capacity) || null;
       const isOnline = b.lock_status === "1";
+      const slotHealthy = isHealthyHeyChargeState(b.slot_status);
+      const batteryHealthyStatus = isHealthyHeyChargeState(b.battery_status);
       const isHealthy =
-        b.battery_abnormal === "0" && b.cable_abnormal === "0";
+        b.battery_abnormal === "0" &&
+        b.cable_abnormal === "0" &&
+        slotHealthy &&
+        batteryHealthyStatus;
       const isLowBattery =
         isOnline &&
         isHealthy &&
         batteryLevel !== null &&
         batteryLevel < MIN_RENTABLE_BATTERY_PERCENT;
+      const status = !isOnline
+        ? "Offline"
+        : !isHealthy
+          ? "Problem Slot"
+          : isLowBattery
+            ? "Low Battery"
+            : "Online";
 
       slotMap.set(b.slot_id, {
         slot_id: b.slot_id,
         battery_id: normalizeBatteryId(b.battery_id) || b.battery_id,
         level: batteryLevel,
-        status: isLowBattery ? "Low Battery" : isOnline ? "Online" : "Offline",
+        status,
         rented: false,
         phoneNumber: "",
         rentedAt: null,
@@ -144,7 +177,9 @@ export async function updateSingleStation(imei: string) {
             b.slot_id &&
             b.lock_status === "1" &&
             b.battery_abnormal === "0" &&
-            b.cable_abnormal === "0",
+            b.cable_abnormal === "0" &&
+            isHealthyHeyChargeState(b.slot_status) &&
+            isHealthyHeyChargeState(b.battery_status),
         )
         .map((b: any) => b.slot_id),
     );
