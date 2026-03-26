@@ -16,6 +16,7 @@ import {
   faBan,
   faExclamationTriangle,
   faExchangeAlt,
+  faBolt,
 } from "@fortawesome/free-solid-svg-icons";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useDarkModeStore } from "@/stores/useDarkModeStore";
@@ -66,6 +67,11 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
           items: [
             { id: "stations", label: t("stations"), icon: faStore },
             {
+              id: "live-batteries",
+              label: "Live Batteries",
+              icon: faBolt,
+            },
+            {
               id: "station-comparison",
               label: "Station Comparison",
               icon: faChartBar,
@@ -100,6 +106,11 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
           section: "OPERATIONS",
           items: [
             { id: "stations", label: t("stations"), icon: faStore },
+            {
+              id: "live-batteries",
+              label: "Live Batteries",
+              icon: faBolt,
+            },
             {
               id: "station-comparison",
               label: "Station Comparison",

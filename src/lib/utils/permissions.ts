@@ -92,6 +92,7 @@ export function getAllowedRoutes(user: User | null): string[] {
     ...baseRoutes,
     "/dashboard",
     "/stations",
+    "/live-batteries",
     "/station-comparison",
     "/revenue",
     "/blacklist",

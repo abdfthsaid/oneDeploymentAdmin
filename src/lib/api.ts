@@ -32,6 +32,7 @@ export const API_ENDPOINTS = {
   STATIONS_UPDATE: "/api/stations/update",
   STATIONS_DELETE: "/api/stations/delete",
   STATIONS_STATS: "/api/stations/stats",
+  HEYCHARGE_LIVE: "/api/heycharge/live",
   // Transactions
   LATEST_TRANSACTIONS: "/api/transactions/latest",
   TRANSACTION_HISTORY: "/api/transactions/history",
@@ -295,6 +296,22 @@ export const apiService = {
       },
     });
     return response;
+  },
+  getLiveHeyChargeStations: async (imei = "") => {
+    const searchParams = new URLSearchParams();
+    searchParams.set("fresh", "1");
+    if (imei.trim()) {
+      searchParams.set("imei", imei.trim());
+    }
+
+    return apiClient.get(
+      `${API_ENDPOINTS.HEYCHARGE_LIVE}?${searchParams.toString()}`,
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
   },
 
   // Transactions
